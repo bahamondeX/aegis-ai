@@ -1151,3 +1151,31 @@ Make target supplies it and passes all six integration tests. `make lint
 
 The 2-date EPSS plan was published and rechecked. CloudFormation began
 executing the reviewed change set after the migration committed.
+
+## 2026-11-24T14:09Z — V2-A AWS canary PASS
+
+The reviewed `aegis-dev-v2-epss` stack reached `CREATE_COMPLETE` in
+87.58 seconds with five additions. The worker uses the existing encrypted
+lake and the reviewed ARM64 ECR digest. No schedule was added.
+`python -m scripts.verify_v2_canary` exited 0 after three real invocations.
+
+| Verification | Duration | Billed duration | Reported max memory |
+| --- | ---: | ---: | ---: |
+| Imported date 2026-11-21 | 5,299.97 ms | 5,300 ms | 247 MB |
+| Fresh date 2026-11-20 | 4,933.27 ms | 4,934 ms | 333 MB |
+| Fresh date replay | 409.43 ms | 410 ms | 333 MB |
+
+The fresh date committed 410,485 valid scores with zero rejected or duplicate
+rows. Source and Parquet objects total 7,749,123 bytes, the measured scratch
+artifact footprint. Both S3 versions matched SHA-256, byte counts, and the
+project SSE-KMS key. A version-pinned GET independently verified the complete
+source bytes. The imported and replay calls reused their exact receipts and
+created no new attempt. The verifier made 13 S3 GET and eight HEAD calls.
+Three Lambda calls cost approximately USD 0.000143 at gross regional rates.
+The migration and canary remain within the initial scope by the conservative
+plan bound. Account-wide billing lacks current V2 attribution.
+
+`data/evidence/v2-activation/{activate.log,canary.json,change-set.json}`
+records the immutable inputs and AWS results. The deployed MVP release and
+G6/G7 identity evidence retain their prior status. Start a bounded, reviewed
+historical campaign using the remaining one-time scope.
