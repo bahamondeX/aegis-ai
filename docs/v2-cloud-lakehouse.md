@@ -204,3 +204,19 @@ receipt. Its median and p95 are explicitly approximate. The complete
 snapshot and Gold object references are committed together after all dates
 reconcile. The `--probe-date 2021-05-14` option reproduces the isolated
 external-file compatibility check.
+
+After a publisher interruption, inspect the full commit receipt and the
+current Glue snapshot's Iceberg manifests. Keep the original attempt
+receipts. If attachment was incomplete, use only an available attempt
+within the reviewed budget. The publisher skips files already registered
+for their dates.
+
+If all dates are attached and all Gold queries succeeded, finish the same
+attempt with `--recover-athena <json-file>`. The file contains the
+`base_snapshot` observed before that attempt, the final `snapshot`, and
+the complete list `query_ids` collected from the authorized Athena
+workgroup. Recovery checks every SQL statement and result against the
+reservation, the pinned snapshot and the Bronze roster. It reads the
+existing results and writes the staging Gold commit without attaching
+files or starting Athena executions. Legacy date receipts that lack a
+percentile-null count are reconciled against their version-pinned Parquet.

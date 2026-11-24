@@ -1,10 +1,27 @@
 """Tests for gaps and model scopes in the V2 analytical history contract."""
 
 from datetime import date, timedelta
+from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
+from pipelines.bronze import LocalBronze, artifact, ensure
+from pipelines.io import DataError
 from pipelines.v2_history import temporal_rows
+from scripts.v2_epss_silver_bulk import missing_percentiles
+
+
+def test_legacy_epss_receipt_recovers_real_null_count_from_parquet(tmp_path: Path) -> None:
+    # Isolated synthetic fixture for a legacy receipt without a null count.
+    file = tmp_path / "fixture.parquet"
+    pq.write_table(pa.table({"percentile": [0.0, None, 0.2, None]}), file, row_group_size=2)
+    store = LocalBronze(tmp_path / "bronze")
+    ref, _ = ensure(store, artifact("epss", "normalized", file), file)
+    assert missing_percentiles(store, ref, 4) == 2
+    with pytest.raises(DataError, match="rows or schema"):
+        missing_percentiles(store, ref, 5)
 
 
 def test_rolling_measures_require_every_day_under_the_same_model():

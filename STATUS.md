@@ -1356,3 +1356,67 @@ in the per-date receipts. See `data/evidence/v2-activation/campaign-complete.jso
 The existing lake is attaching the full committed archive into staging
 Iceberg, followed by the bounded Athena daily Gold reconciliation.
 The existing CloudFront origin responded HTTPS 200 during this check.
+
+## 2026-11-24T15:22Z — EPSS staging recovered after two interrupted attempts
+
+Resumed from local commit `5d1d7f4`. The S3 publication prefix contained
+immutable full-attempt receipts 1 and 2. It had no `full/committed.json`.
+Glue version 46 pointed to staging snapshot `1176448099883875211`.
+Reading its Iceberg manifests reconciled 1,306 unique roster dates,
+zero duplicate partitions and 736 missing dates, beginning 2024-11-16.
+The local log ended at an earlier snapshot and was retained.
+
+The scoped AWS MCP reads confirmed account ending 6271, `us-east-1`,
+the project lake, and the encrypted Athena engine 3 workgroup with its
+64 MiB cutoff. An independent PyIceberg scan used the existing `default`
+profile. Athena history checks covered all 291 listed executions and
+found zero statements submitted since full attempt 1 began. Production
+`control/latest.json` pointed to run `d32e5c14-e46c-4126-b542-af560d8ed269`
+and CloudFront responded HTTP 200.
+
+The USD 15 one-time limit and conditional monthly limit remain in force.
+The gross planning total for attempt 3 is USD 14.85. It includes USD
+11.70 in initial and historical allocations, USD 2.00 for other staging
+reservations, a USD 0.40 modeled allowance for the two prior attach-only
+attempts, and the existing USD 0.75 cap for attempt 3. The attach-only
+allowance covers Bronze receipt reads, object checks, Iceberg metadata
+and file footers, Glue, KMS and metadata storage. AWS billing did not
+provide final per-attempt spend. The calculation preserves both original
+S3 reservations and uses the observed absence of Athena work to reconcile
+those interrupted attempts for planning.
+
+`uv run --locked --no-sync python -m scripts.v2_epss_silver_bulk --bundle data/evidence/v2-activation/history-bundle.json --evidence data/evidence/v2-resume-20261124 --attempt 3`
+resumed the staging table. Evidence, including the prior receipt inventory
+and verified production baseline, is in `data/evidence/v2-resume-20261124/`.
+
+## 2026-11-24T15:41Z — Historical EPSS Silver and daily Gold accepted in staging
+
+Iceberg snapshot `5416157301492221669` at Glue version 70 retains the
+1,306 confirmed data files and adds 736 files across 24 windows. It has
+2,042 unique partitions and 465,857,152 score rows from 2021-04-14
+through 2026-11-24. Nine dates remain absent from the pinned upstream
+archive. The S3 `full/committed.json` receipt binds this snapshot and the
+72,205-byte daily Gold object. The staging release digest is
+`6927addcdafc1cfc2d7675f5bd9ec52331b4350baf118a070755c48352346303`.
+
+| Check | Exit | Result in `data/evidence/v2-resume-20261124/` |
+| --- | --- | --- |
+| Full attempt 3 command above | 1 | `attempt-3.log` and `attempt-3-time.log`. All 736 partitions committed and all 128 Athena statements succeeded. Receipt reconciliation stopped with `'missing_percentile'` on the legacy receipt for 2026-11-23. |
+| Same command with `--recover-athena data/evidence/v2-resume-20261124/recover-athena.json` | 0 | `recovery.log`, `recovery-time.log` and `bulk-silver-full.json`. The version-pinned Parquet independently yielded zero null percentiles for that date. Recovery read the 128 existing results, started zero Athena queries, added zero Iceberg files and closed the original reservation. |
+| Same full attempt 3 command with `--evidence data/evidence/v2-resume-20261124/replay`, plus `cmp` | 0 | `replay.log`. Reused an identical committed receipt. Both original attempt object versions remained intact. |
+| `PYTHONPATH=. uv run --locked --no-sync python data/evidence/v2-resume-20261124/verify-release.py` | 0 | `acceptance.json`. Read and verified the pinned S3 versions; compared nine DuckDB samples spanning all five models; verified release scoping, gap handling, authentication and REST/MCP parity with loopback Chromium and the official MCP SDK. |
+| `make lint typecheck test SNAPSHOT=4e13ca6b-c2e1-4407-88bc-c362da7dbacb` | 0 | `python-final.log`. 92 tests passed. |
+| `make smoke-local SNAPSHOT=4e13ca6b-c2e1-4407-88bc-c362da7dbacb` and `sh scripts/frontend.sh test` | 0 | `local-smoke.log` and `frontend-contracts.log`. Seven baseline REST routes, six MCP tools, and four frontend contract tests passed. |
+
+Athena scanned 2,984,061,085 bytes total and at most 57,295,440 bytes
+per query, with 294,091 ms of cumulative execution time. Gross Athena
+scan cost is estimated at USD 0.01622 using per-query rounding and
+minimums. Final billed AWS cost is unavailable.
+[Athena pricing](https://aws.amazon.com/athena/pricing/)
+
+The S3 production pointer retained its original version, CloudFront its
+configuration ETag and deployed HTML ETag, and the hosted API its code
+SHA and revision. `production-before.json` and `production-after.json`
+record the comparison. Acceptance here covers the staging data and
+loopback serving contracts. The hosted V2 chart, hosted identity
+acceptance and production promotion remain pending.

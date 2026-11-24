@@ -124,6 +124,14 @@ class AthenaReader:
             if state not in ("SUCCEEDED", "FAILED", "CANCELLED"):
                 self.client.stop_query_execution(QueryExecutionId=execution_id)
             raise
+        return self.completed_result(execution, max_rows=max_rows)
+
+    def completed_result(
+        self, execution: dict[str, Any], *, max_rows: int
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        if execution["Status"]["State"] != "SUCCEEDED":
+            raise DataError("athena: query results require a successful execution")
+        execution_id = execution["QueryExecutionId"]
         rows: list[dict[str, Any]] = []
         results = self.client.get_paginator("get_query_results").paginate(
             QueryExecutionId=execution_id, PaginationConfig={"PageSize": 500}

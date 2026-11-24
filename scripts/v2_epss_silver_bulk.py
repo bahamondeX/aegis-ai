@@ -5,19 +5,31 @@ import json
 import tempfile
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from uuid import UUID
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
+from pydantic import BaseModel, ConfigDict, Field
 from pyiceberg.table import Table
 
 from infra.operations import scoped_catalog, stack_outputs
 from infra.settings import SCAN_CUTOFF, SDK_CONFIG
 from pipelines.athena import AthenaReader
-from pipelines.bronze import PREFIX, ObjectRef, S3Bronze, artifact, ensure, put_record, record
+from pipelines.bronze import (
+    PREFIX,
+    BronzeStore,
+    ObjectRef,
+    S3Bronze,
+    artifact,
+    ensure,
+    materialized,
+    put_record,
+    record,
+)
 from pipelines.bronze_migrate import verified_lake
 from pipelines.config import project_environment
 from pipelines.epss_bronze import campaign_key, day_key, plan_id
@@ -27,8 +39,27 @@ from scripts.v2_epss_campaign import authorized, scope
 
 CANARY_DATES = {"2026-11-20", "2026-11-21"}
 MAX_QUERY_DAYS = 16
+MAX_QUERIES = 132
 ALLOCATION = Decimal("0.75")
 PREVIOUS_STAGING = Decimal("0.45")
+
+
+class Recovery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    base_snapshot: int = Field(gt=0)
+    snapshot: int = Field(gt=0)
+    query_ids: list[UUID] = Field(min_length=1, max_length=MAX_QUERIES)
+
+
+def missing_percentiles(store: BronzeStore, ref: ObjectRef, expected_rows: int) -> int:
+    with materialized(store, ref) as path:
+        parquet = pq.ParquetFile(path)
+        if parquet.metadata.num_rows != expected_rows or "percentile" not in parquet.schema.names:
+            raise DataError("legacy EPSS Parquet does not match the receipt's rows or schema")
+        return sum(
+            batch.column(0).null_count
+            for batch in parquet.iter_batches(columns=["percentile"], batch_size=65536)
+        )
 
 
 def read_ledger(store: S3Bronze, members: dict, *, probe: str | None) -> dict:
@@ -48,6 +79,15 @@ def read_ledger(store: S3Bronze, members: dict, *, probe: str | None) -> dict:
         ref = ObjectRef(**receipt["normalized_object"])
         if store.inspect(ref.key) != ref or receipt["counts"]["valid"] < 1:
             raise DataError("EPSS normalized data has changed since Bronze verified it")
+        counts = receipt["counts"]
+        if "missing_percentile" not in counts:
+            counts["missing_percentile"] = missing_percentiles(store, ref, counts["valid"])
+            print(
+                json.dumps(
+                    {"legacy_receipt": day, "missing_percentile": counts["missing_percentile"]}
+                ),
+                flush=True,
+            )
         return receipt
 
     with ThreadPoolExecutor(max_workers=8) as workers:
@@ -55,10 +95,10 @@ def read_ledger(store: S3Bronze, members: dict, *, probe: str | None) -> dict:
         return dict(zip(selected, workers.map(load, selected), strict=True))
 
 
-def file_days(table: Table) -> dict[str, list[str]]:
+def file_days(table: Table, *, snapshot_id: int | None = None) -> dict[str, list[str]]:
     dates = defaultdict(list)
     epoch = date(1970, 1, 1)
-    for task in table.scan().plan_files():
+    for task in table.scan(snapshot_id=snapshot_id).plan_files():
         (day,) = tuple(task.file.partition)
         dates[(epoch + timedelta(days=day)).isoformat()].append(task.file.file_path)
     return dict(dates)
@@ -95,7 +135,79 @@ def attach(table: Table, bucket: str, ledger: dict, windows: list[dict]) -> int:
     return written
 
 
-def gold(table: Table, reader: AthenaReader, store: S3Bronze, ledger: dict, *, probe: bool) -> dict:
+def recovered_queries(
+    reader: AthenaReader,
+    recovery: Recovery,
+    reserved_at: datetime,
+    conf: dict,
+) -> dict[str, dict]:
+    ids = [str(query_id) for query_id in recovery.query_ids]
+    if len(set(ids)) != len(ids):
+        raise DataError("recovery repeats an Athena query ID")
+    executions: dict[str, dict] = {}
+    for start in range(0, len(ids), 50):
+        batch = ids[start : start + 50]
+        response = reader.client.batch_get_query_execution(QueryExecutionIds=batch)
+        returned = response["QueryExecutions"]
+        if response.get("UnprocessedQueryExecutionIds") or {
+            query["QueryExecutionId"] for query in returned
+        } != set(batch):
+            raise DataError("Athena did not return the complete set of recovery queries")
+        for query in returned:
+            status = query["Status"]
+            results = query["ResultConfiguration"]
+            sql = query["Query"]
+            if (
+                status["State"] != "SUCCEEDED"
+                or status["SubmissionDateTime"] < reserved_at
+                or query["WorkGroup"] != reader.workgroup
+                or query["QueryExecutionContext"]["Database"] != reader.database
+                or query["EngineVersion"]["EffectiveEngineVersion"] != "Athena engine version 3"
+                or results["EncryptionConfiguration"]
+                != conf["ResultConfiguration"]["EncryptionConfiguration"]
+                or not results["OutputLocation"].startswith(
+                    conf["ResultConfiguration"]["OutputLocation"]
+                )
+                or not 0
+                <= query["Statistics"]["DataScannedInBytes"]
+                <= conf["BytesScannedCutoffPerQuery"]
+                or sql in executions
+            ):
+                raise DataError("Athena recovery query is outside the reserved execution scope")
+            executions[sql] = query
+    return executions
+
+
+def recovered_partitions(table: Table, bucket: str, ledger: dict, recovery: Recovery) -> int:
+    if (
+        table.current_snapshot().snapshot_id != recovery.snapshot
+        or table.snapshot_by_id(recovery.base_snapshot) is None
+    ):
+        raise DataError("Iceberg snapshots do not match the recovery plan")
+    before = file_days(table, snapshot_id=recovery.base_snapshot)
+    after = file_days(table, snapshot_id=recovery.snapshot)
+    if (
+        after.keys() != ledger.keys()
+        or not before.keys() <= after.keys()
+        or any(after[day] != paths for day, paths in before.items())
+    ):
+        raise DataError("recovery would omit or replace confirmed Iceberg partitions")
+    for day, paths in after.items():
+        path = f"s3://{bucket}/{ledger[day]['normalized_object']['key']}"
+        if len(paths) != 1 or (paths != [path] and day not in CANARY_DATES):
+            raise DataError(f"recovered Iceberg partition differs from Bronze for {day}")
+    return len(after) - len(before)
+
+
+def gold(
+    table: Table,
+    reader: AthenaReader,
+    store: S3Bronze,
+    ledger: dict,
+    *,
+    probe: bool,
+    completed: dict[str, dict] | None = None,
+) -> dict:
     snapshot = table.current_snapshot().snapshot_id
     db = reader.database
     rel = f'"{db}"."{NAME}" FOR VERSION AS OF {snapshot}'
@@ -104,17 +216,21 @@ def gold(table: Table, reader: AthenaReader, store: S3Bronze, ledger: dict, *, p
     for start in range(0, len(all_days), MAX_QUERY_DAYS):
         dates = all_days[start : start + MAX_QUERY_DAYS]
         selected = ", ".join(f"DATE '{date.fromisoformat(day).isoformat()}'" for day in dates)
-        rows, metrics = reader._select(
-            f"""SELECT score_date, min(model_version) AS model_version,
+        sql = f"""SELECT score_date, min(model_version) AS model_version,
                       count(DISTINCT model_version) AS model_count, count(*) AS observed_count,
                       count_if(percentile IS NULL) AS missing_percentile_count,
                       count_if(epss >= 0.95) AS probability_at_least_095_count,
                       avg(epss) AS mean_probability,
                       approx_percentile(epss, 0.5) AS approximate_median_probability,
                       approx_percentile(epss, 0.95) AS approximate_p95_probability
-                 FROM {rel} WHERE score_date IN ({selected}) GROUP BY 1 ORDER BY 1""",
-            max_rows=len(dates),
-        )
+                 FROM {rel} WHERE score_date IN ({selected}) GROUP BY 1 ORDER BY 1"""
+        if completed is None:
+            rows, metrics = reader._select(sql, max_rows=len(dates))
+        else:
+            execution = completed.pop(sql, None)
+            if execution is None:
+                raise DataError("no completed Athena query matches the exact Gold statement")
+            rows, metrics = reader.completed_result(execution, max_rows=len(dates))
         if len(rows) != len(dates):
             raise DataError("the Gold query omitted a verified source date")
         for day, row in zip(dates, rows, strict=True):
@@ -129,6 +245,8 @@ def gold(table: Table, reader: AthenaReader, store: S3Bronze, ledger: dict, *, p
                 raise DataError(f"Gold daily counts for {day} differ from the verified Bronze data")
         observations.extend(rows)
         queries.append(metrics)
+    if completed:
+        raise DataError("recovery includes unexpected Athena statements")
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / "daily.parquet"
         pq.write_table(pa.Table.from_pylist(observations), path, compression="zstd")
@@ -148,7 +266,9 @@ def gold(table: Table, reader: AthenaReader, store: S3Bronze, ledger: dict, *, p
     }
 
 
-def publish(bundle: dict, probe: str | None, attempt: int) -> dict:
+def publish(
+    bundle: dict, probe: str | None, attempt: int, recovery: Recovery | None = None
+) -> dict:
     env = project_environment()
     settings = scope(env)
     authorized(env, settings, bundle)
@@ -186,26 +306,36 @@ def publish(bundle: dict, probe: str | None, attempt: int) -> dict:
         raise DataError("historical roster does not match the reviewed completeness denominator")
     ledger = read_ledger(store, members, probe=probe)
     queries = (len(ledger) + MAX_QUERY_DAYS - 1) // MAX_QUERY_DAYS
-    if queries > 132 or not put_record(
-        store,
-        f"{stage}/attempt-{attempt}.json",
-        {"max_queries": queries, "usd": str(ALLOCATION)},
-        exact=False,
-    ):
+    if queries > MAX_QUERIES:
         raise DataError("bulk EPSS publication has no remaining attempt reservation")
+    receipt_key = f"{stage}/attempt-{attempt}.json"
+    reservation = {"max_queries": queries, "usd": str(ALLOCATION)}
+    if recovery is None:
+        if not put_record(store, receipt_key, reservation, exact=False):
+            raise DataError("bulk EPSS publication has no remaining attempt reservation")
+    elif probe or len(recovery.query_ids) != queries or record(store, receipt_key) != reservation:
+        raise DataError("Gold recovery requires its existing full attempt and complete query set")
     table = scoped_catalog(session, settings).load_table((settings.database, NAME))
     expected_path = f"s3://{store.bucket}/v2/silver/{settings.database}/{NAME}"
     if table.format_version != 2 or table.location() != expected_path:
         raise DataError("bulk publication targets a different Iceberg table")
-    attached = attach(table, store.bucket, ledger, windows)
-    if attach(table, store.bucket, ledger, windows):
-        raise DataError("bulk EPSS publication duplicated a committed date")
+    reader = AthenaReader(athena, settings.database, settings.project)
+    completed = None
+    if recovery is None:
+        attached = attach(table, store.bucket, ledger, windows)
+        if attach(table, store.bucket, ledger, windows):
+            raise DataError("bulk EPSS publication duplicated a committed date")
+    else:
+        attached = recovered_partitions(table, store.bucket, ledger, recovery)
+        reserved_at = store.client.head_object(**store.parameters(receipt_key))["LastModified"]
+        completed = recovered_queries(reader, recovery, reserved_at, conf)
     result = gold(
         table,
-        AthenaReader(athena, settings.database, settings.project),
+        reader,
         store,
         ledger,
         probe=bool(probe),
+        completed=completed,
     )
     result.update(
         {
@@ -227,9 +357,17 @@ def main() -> None:
     parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--probe-date", type=date.fromisoformat)
     parser.add_argument("--attempt", default=1, type=int, choices=(1, 2, 3))
+    parser.add_argument(
+        "--recover-athena", type=Path, help="Reuse a reservation's completed Gold queries"
+    )
     args = parser.parse_args()
     day = args.probe_date.isoformat() if args.probe_date else None
-    result = publish(json.loads(args.bundle.read_bytes()), day, args.attempt)
+    recovery = (
+        Recovery.model_validate_json(args.recover_athena.read_bytes())
+        if args.recover_athena
+        else None
+    )
+    result = publish(json.loads(args.bundle.read_bytes()), day, args.attempt, recovery)
     write_json(args.evidence / f"bulk-silver-{day or 'full'}.json", result)
     print(json.dumps({k: v for k, v in result.items() if k not in {"date_evidence", "athena"}}))
 
