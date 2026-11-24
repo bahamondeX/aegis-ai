@@ -19,6 +19,7 @@ def main() -> None:
     scope.add_argument("--public-only", action="store_true")
     scope.add_argument("--journey-only", action="store_true")
     scope.add_argument("--session-only", action="store_true")
+    parser.add_argument("--evidence-dir", type=Path)
     args = parser.parse_args()
     env = project_environment()
     settings = Settings.load(environment=env)
@@ -37,10 +38,11 @@ def main() -> None:
     ):
         raise DataError("expected the assigned CloudFront HTTPS origin")
     data = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
-    evidence = data / "evidence/final"
+    evidence = args.evidence_dir.resolve() if args.evidence_dir else data / "evidence/final"
     evidence.mkdir(parents=True, exist_ok=True)
     browser_env = {**os.environ, "AEGIS_BROWSER_URL": url, "AEGIS_BROWSER_EVIDENCE": str(evidence)}
     browser_env.pop("AEGIS_BROWSER_HOSTED_FIXTURE", None)
+    browser_env.pop("AEGIS_BROWSER_PUBLIC_ONLY", None)
 
     def fixture(action: str) -> None:
         subprocess.run(
@@ -62,6 +64,7 @@ def main() -> None:
 
     command = ["sh", "scripts/frontend.sh", "browser", "hosted_acceptance.spec.ts"]
     if args.public_only:
+        browser_env["AEGIS_BROWSER_PUBLIC_ONLY"] = "1"
         subprocess.run(
             [*command, "-g", "serves HTTPS"], env=browser_env, cwd=ROOT, check=True, timeout=80
         )
@@ -75,7 +78,7 @@ def main() -> None:
             command.extend(["-g", "approved browser reads"])
         elif args.session_only:
             command.extend(["-g", "hosted cancellation"])
-        subprocess.run(command, env=browser_env, cwd=ROOT, check=True, timeout=240)
+        subprocess.run(command, env=browser_env, cwd=ROOT, check=True, timeout=480)
     finally:
         fixture("disable")
 

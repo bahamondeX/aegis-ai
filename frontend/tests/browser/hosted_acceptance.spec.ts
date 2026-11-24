@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 const target = process.env.AEGIS_BROWSER_URL
 const fixture = process.env.AEGIS_BROWSER_HOSTED_FIXTURE
+const publicOnly = process.env.AEGIS_BROWSER_PUBLIC_ONLY === '1'
 const evidence = process.env.AEGIS_BROWSER_EVIDENCE || '../data/evidence/final'
 
 interface Credentials { username: string, password: string }
@@ -56,6 +57,7 @@ test('CloudFront serves HTTPS and excludes unapproved users from analytics and a
   await expect(page.getByRole('heading', { name: 'Administrator access required' })).toBeVisible()
   expect((await request.get('/api/aegis/v1/coverage')).status()).toBe(401)
   expect((await request.get('/api/aegis/v1/admin/users')).status()).toBe(401)
+  if (!fixture && !publicOnly) throw new Error('The hosted acceptance requires scoped identities.')
   if (fixture) {
     const scoped = JSON.parse(await readFile(fixture, 'utf8')) as HostedFixture
     if (!scoped.hosted) throw new Error('A hosted validation fixture is required')
@@ -66,7 +68,13 @@ test('CloudFront serves HTTPS and excludes unapproved users from analytics and a
       await expect(pendingPage.getByRole('heading', { name: 'Approval pending' })).toBeVisible()
       expect((await request.get('/api/aegis/v1/coverage', { headers: { Authorization: bearer } })).status()).toBe(403)
       expect((await request.get('/api/aegis/v1/admin/users', { headers: { Authorization: bearer } })).status()).toBe(403)
-      expect((await request.get('/api/aegis/mcp', { headers: { Authorization: bearer } })).status()).toBe(404)
+      expect((await request.post('/api/aegis/mcp', {
+        headers: { Authorization: bearer, Accept: 'application/json, text/event-stream' },
+        data: { jsonrpc: '2.0', method: 'tools/list', id: 1 },
+      })).status()).toBe(404)
+      expect((await request.get('/api/aegis/v1/coverage', {
+        headers: { Authorization: bearer.replace(/\.([^.])([^.]*)$/, (_, first: string, rest: string) => '.' + (first === 'A' ? 'Q' : 'A') + rest) },
+      })).status()).toBe(401)
       const payload = { snapshot_id: scoped.snapshot, question: 'Prioritize known exploited vulnerabilities' }
       const runtime = await request.post(scoped.runtime, {
         headers: {
@@ -85,13 +93,27 @@ test('CloudFront serves HTTPS and excludes unapproved users from analytics and a
 
 test('approved browser reads one snapshot and streams live evidence-backed mitigation', async ({ page, request, browser }) => {
   test.skip(!target?.startsWith('https://') || !fixture, 'The hosted journey requires actual AWS and temporary identities.')
-  test.setTimeout(180_000)
+  test.setTimeout(210_000)
   const scoped = JSON.parse(await readFile(fixture!, 'utf8')) as HostedFixture
   if (!scoped.hosted) throw new Error('A hosted validation fixture is required')
   const bearer = await login(page, scoped.users.member)
   const headers = { Authorization: bearer }
   await expect(page.getByRole('heading', { name: 'Threat command center.' })).toBeVisible()
   await expect(page.getByText('Exposure coverage unavailable')).toBeVisible()
+  const world = page.locator('#exposure')
+  const country = page.getByLabel('Map country')
+  await expect(country).toHaveValue('')
+  await expect(world.getByLabel('Interactive globe with Natural Earth boundaries')).toBeVisible()
+  await page.locator('#exposure').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: join(evidence, 'production-world-map.png') })
+  await country.selectOption('PE')
+  await expect(world.getByText('Network context unavailable')).toBeVisible()
+  await expect(world.getByText('Exposure coverage unavailable')).toBeVisible()
+  await country.selectOption('CA')
+  await expect(world.getByText('Canadian Radio-television and Telecommunications Commission')).toBeVisible()
+  await expect(world.getByText('Exposure coverage unavailable')).toBeVisible()
+  await country.selectOption('')
+  await expect(page.locator('tbody tr').first()).toBeVisible()
   const context = await request.get('/api/aegis/v1/map?country_iso2=CA', { headers })
   expect(context.status()).toBe(200)
   const map = await context.json()
@@ -106,14 +128,35 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   const source = await request.get('/api/aegis/v1/coverage', { headers })
   expect((await source.json()).snapshot_id).toBe(scoped.snapshot)
   expect((await request.get('/api/aegis/v1/admin/users', { headers })).status()).toBe(403)
+  expect((await request.post('/api/aegis/v1/admin/users/' + scoped.users.member.username, {
+    headers: { ...headers, 'X-Role': 'administrator' },
+    data: { action: 'suspend', expected_status: 'APPROVED', administrator: true },
+  })).status()).toBe(403)
   const relationship = page.getByLabel('Inspect a relationship')
   await expect(relationship).toBeVisible({ timeout: 40_000 })
   await relationship.selectOption({ index: 1 })
   const card = page.getByRole('button', { name: 'Open CVE detail', exact: true })
   await expect(card).toBeVisible()
+  await relationship.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: join(evidence, 'production-relationship-graph.png') })
   await page.screenshot({ path: join(evidence, 'production-command-center.png') })
   await card.click()
   await expect(page.getByRole('button', { name: 'How to mitigate' })).toBeVisible()
+  const detailDialog = page.getByRole('dialog', { name: 'CVE detail' })
+  await detailDialog.getByRole('button', { name: /^CISA/ }).click()
+  const drawer = page.getByRole('dialog', { name: 'Evidence record' })
+  await expect(drawer).toBeVisible()
+  const evidenceId = drawer.getByText(/^[a-f0-9]{64}$/).first()
+  await expect(evidenceId).toBeVisible()
+  const evidencePath = '/api/aegis/v1/evidence/' + await evidenceId.innerText()
+  const disclosure = await request.get(evidencePath, { headers })
+  expect(disclosure.status()).toBe(200)
+  const record = await disclosure.json()
+  expect(record.snapshot_id).toBe(scoped.snapshot)
+  expect(record.data.evidence_id).toBe(await evidenceId.innerText())
+  expect((await request.get(evidencePath)).status()).toBe(401)
+  await drawer.getByRole('button', { name: 'Close evidence' }).click()
+  await card.click()
   await page.screenshot({ path: join(evidence, 'production-cve-detail.png') })
   const streaming = page.waitForResponse(r =>
     r.request().method() === 'POST' && r.url().endsWith('/api/aegis/v1/investigations'))
@@ -143,6 +186,17 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   await page.screenshot({ path: join(evidence, 'production-mitigation.png') })
 
   const initial = response.request()
+  const posts: string[] = []
+  const observe = (r: typeof initial) => { if (r.method() === 'POST') posts.push(r.url()) }
+  page.on('request', observe)
+  try {
+    await page.getByRole('button', { name: 'Request help' }).click()
+    const draft = page.getByLabel('SOC / CSIRT handoff draft')
+    await expect(draft).toHaveValue(new RegExp(scoped.snapshot))
+    await draft.fill('Operator-reviewed acceptance draft')
+    await expect(draft).toHaveValue('Operator-reviewed acceptance draft')
+    expect(posts).toEqual([])
+  } finally { page.off('request', observe) }
   const start = await initial.allHeaders()
   const replay = await request.post('/api/aegis/v1/investigations', {
     headers: { ...headers, 'Idempotency-Key': start['idempotency-key'] ?? '', 'Last-Event-ID': '2' },

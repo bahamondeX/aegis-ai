@@ -4,6 +4,8 @@ import argparse
 import json
 import os
 import secrets
+from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
@@ -58,11 +60,34 @@ def main() -> None:
         fixture = json.loads(path.read_text())
         if fixture["pool"] != pool:
             raise DataError("fixture pool differs from the current stack")
+        cleanup = []
         for entry in fixture["users"].values():
             username = entry["username"]
-            if not username.startswith("aegis-validation-"):
-                raise DataError("fixture user prefix differs")
-            client.admin_disable_user(UserPoolId=pool, Username=username)
+            user = client.admin_get_user(UserPoolId=pool, Username=username)
+            if (
+                not entry.get("creation_request_id")
+                or entry.get("subject") != attributes(user)["sub"]
+            ):
+                raise DataError("fixture lacks creation evidence or the subject differs")
+            disabled = client.admin_disable_user(UserPoolId=pool, Username=username)
+            verified = client.admin_get_user(UserPoolId=pool, Username=username)
+            if verified["Enabled"]:
+                raise DataError("the validation identity remained enabled")
+            cleanup.append(
+                {
+                    "username_hash": sha256(username.encode()).hexdigest()[:12],
+                    "subject_hash": sha256(entry["subject"].encode()).hexdigest()[:12],
+                    "creation_request_id": entry["creation_request_id"],
+                    "disable_request_id": disabled["ResponseMetadata"]["RequestId"],
+                    "disabled_at_utc": datetime.now(UTC).isoformat(),
+                }
+            )
+        history = folder / "fixture-cleanup.ndjson"
+        with os.fdopen(
+            os.open(history, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), "a"
+        ) as handle:
+            for item in cleanup:
+                handle.write(json.dumps(item) + "\n")
         path.unlink()
         print(json.dumps({"disabled_users": len(fixture["users"])}))
         return
@@ -84,7 +109,7 @@ def main() -> None:
         for role in ("member", "peer", "foreign"):
             username = f"aegis-validation-{role}-{secrets.token_hex(4)}"
             password = secrets.token_urlsafe(32) + "Aa#1"
-            client.admin_create_user(
+            created = client.admin_create_user(
                 UserPoolId=pool,
                 Username=username,
                 TemporaryPassword=password,
@@ -100,18 +125,23 @@ def main() -> None:
                     else {}
                 ),
             )
-            users[role] = {"username": username, "password": password}
+            users[role] = {
+                "username": username,
+                "password": password,
+                "creation_request_id": created["ResponseMetadata"]["RequestId"],
+            }
+            user = client.admin_get_user(UserPoolId=pool, Username=username)
+            users[role]["subject"] = attributes(user)["sub"]
             client.admin_set_user_password(
                 UserPoolId=pool, Username=username, Password=password, Permanent=True
             )
-            if role != "foreign" and accounts is not None:
-                user = client.admin_get_user(UserPoolId=pool, Username=username)
-                subject = UUID(attributes(user)["sub"])
+            if role in {"member", "peer"} and accounts is not None:
+                subject = UUID(users[role]["subject"])
                 if not accounts.put(
                     str(subject), Decision(status=Status.APPROVED).model_dump_json().encode(), None
                 ):
                     raise DataError("an approved validation subject already has a decision")
-            elif role != "foreign":
+            elif role in {"member", "peer"}:
                 client.admin_add_user_to_group(
                     UserPoolId=pool, Username=username, GroupName=settings.project
                 )
