@@ -1009,3 +1009,25 @@ and Parquet. Available disk was 2.93 GB before the 1 GiB reserve.
 Complete EPSS normalization is blocked by local storage. The runbook
 records an approximately 8 GiB free destination for EPSS and bounded
 cloud cost scenarios. Continue V2.2 source qualification independently.
+
+## 2026-11-24T12:04:17Z — Local global network context and capability audit verified
+
+| Command or observation | Exit | Evidence under `data/evidence/v2/` |
+| --- | --- | --- |
+| `python -m pipelines.wdi_context` and checksum-verified rerun | 0 | `wdi-context.log` and `wdi-context-replay.log`. Two official World Bank API manifests yielded a versioned dimension of 217 economies and 14,322 yearly ITU subscription records. 214 economies have measured values in the archive and 151 in 2024. |
+| `python -m pipelines.network_registry` | 0 after correction | `rir-context-r3.log`. The NRO source SHA-256, 776,338 total rows and 117,801 ASN rows matched their headers. The projection kept only 363 coarse registration aggregates, covering 240 published country codes and five RIRs. |
+| DuckDB read of both network outputs | 0 | `network-parquet-check.json`. WDI has zero country dimension orphans. Its 3,728 nulls and 4,058 explicit zero readings stayed distinct. The RIR schema includes no individual network identifiers. |
+| Existing Shodan account and field metadata | HTTP 200 | `shodan-capability.json`. Plan label `oss`, zero query and scan credits, 94 filters and 90 facets. The verified account metadata does not establish aggregate observation entitlement or public reuse. The collection has no CVE aggregate evidence for the 431,119 staged CVE Program IDs. |
+| DuckDB CVE-source overlap benchmark | 0 | `duckdb-corpus-timings.json`. 431,100 joined IDs, 549.05 ms first query and 381.92 ms repeat on one connection. OS cache was uncontrolled. |
+| `make lint typecheck test` and frontend contracts | 0 | `regression-release.log` and `frontend-contracts.log`. 84 Python tests and four frontend tests passed. |
+| Existing CloudFront HTTPS root | HTTP 200 | `production-https-head.log`. Previous G1–G7 evidence remains pinned. |
+
+The first NRO stream closed after a partial transfer. The corrected
+client used bounded ranges with an ETag and verified the official
+payload checksum. The first ranged parse rejected the unterminated
+last line. The subsequent parse consumed it and reconciled all counts
+in 57.62 seconds with 148,029,440 bytes maximum RSS. Network statistics
+remain local pending the V2 release. CVE geographic exposure
+and inferred network associations still require qualified source evidence.
+The full EPSS history needs a larger volume. Expanded Iceberg publication
+and hosted acceptance require separately scoped cloud authorization.

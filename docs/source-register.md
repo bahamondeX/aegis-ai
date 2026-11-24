@@ -55,3 +55,29 @@ through the hosted interface and API on this release. Canada returned the
 qualified network context. Peru showed unavailable network context.
 Both scopes reported unavailable CVE geographic exposure and emitted no
 exposure observations. [Production evaluation](evaluation.md)
+
+## V2 network source qualification
+
+| Source | Basis and rights | Executed outcome |
+| --- | --- | --- |
+| [World Bank WDI indicator IT.CEL.SETS.P2](https://data.worldbank.org/indicator/IT.CEL.SETS.P2) | World Telecommunication/ICT Indicators Database, ITU, through World Bank WDI. The series is CC BY 4.0. The measure is mobile cellular subscriptions per 100 people. Multiple subscriptions per person can raise the rate above 100. | Two official API manifests verified on the 2026-11-11 source release. A versioned local country and economy dimension has 217 entries. Of 14,322 normalized economy/year rows, 10,594 have a value and 3,728 are null. 214 economies have a historical value and 151 have values in 2024. No provider value was synthesized. |
+| [NRO extended delegated statistics](https://www.nro.net/about/rirs/statistics/) | Daily registration reports from all five RIRs. Geography describes the country code in the registration record. The NRO describes the file as research and analysis data. Its linked format README returned 404 in this review. | The 2026-11-23 checksum-verified report contained 776,338 rows, including 117,801 ASN rows. The local audit projected 103,542 reported registration rows to 363 groups across 240 published registration country codes. Public redistribution scope requires separate verification. |
+| [Shodan API](https://developer.shodan.io/api) | The documented count endpoint returns aggregates without using query credits. Metadata on filters and facets does not establish entitlement to each observation. The provider's [terms](https://static.shodan.io/legal/terms.html) require review for public redistribution. | The configured key returned plan `oss`, zero query and scan credits, 94 filters and 90 facets. Both lists include country, ASN, product and vulnerability fields. The existing free-plan guard did not confirm this plan. No CVE aggregate request or exposure publication was made. |
+
+World Bank's country endpoint reports regions and country codes for both
+economies and aggregates. The local projection excludes 2,904 aggregate rows
+and reports 330 source rows whose economy code did not match the dimension.
+All input rows remain in the archived source. The annual subscription metric
+is independent of Canadian LTE population coverage and CVE geography.
+[World Bank API documentation](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392)
+
+The NRO Parquet projection retains only country-code, registry and state
+aggregates. The receipt binds them to the official report checksum.
+Registration codes may include provider-specific values. The counts
+measure reported registration ranges, and operational geography requires
+independent evidence.
+
+```sh
+uv run --locked --no-sync python -m pipelines.wdi_context
+uv run --locked --no-sync python -m pipelines.network_registry
+```
