@@ -226,15 +226,30 @@ def test_admin_email_mismatch_retries_without_sending_new_code(monkeypatch):
     assert client.attempts == 2
 
 
-def test_admin_authenticator_retries_using_same_enrollment(monkeypatch):
+def test_admin_authenticator_sends_one_matching_code(monkeypatch):
     class Cognito:
         attempts = 0
 
         def verify_software_token(self, **_):
             self.attempts += 1
-            return {"Status": "ERROR" if self.attempts == 1 else "SUCCESS"}
+            return {"Status": "SUCCESS"}
 
     client = Cognito()
-    monkeypatch.setattr("scripts.platform_admin.getpass", lambda _: "000000")
-    verify_admin_totp(client, "local-test-token")
-    assert client.attempts == 2
+    codes = iter(["287082"])
+    monkeypatch.setattr("scripts.platform_admin.time", lambda: 59)
+    monkeypatch.setattr("scripts.platform_admin.getpass", lambda _: next(codes))
+    verify_admin_totp(
+        client, "local-test-token", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "AEGIS Admin TEST"
+    )
+    assert client.attempts == 1
+
+
+def test_admin_authenticator_mismatch_stops_before_cognito(monkeypatch):
+    client = SimpleNamespace(verify_software_token=lambda **_: pytest.fail("unexpected call"))
+    monkeypatch.setattr("scripts.platform_admin.time", lambda: 59)
+    codes = iter(["000000"])
+    monkeypatch.setattr("scripts.platform_admin.getpass", lambda _: next(codes))
+    with pytest.raises(DataError, match="Cognito was not contacted"):
+        verify_admin_totp(
+            client, "local-test-token", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "AEGIS Admin TEST"
+        )

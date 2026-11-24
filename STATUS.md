@@ -871,3 +871,17 @@ terminal. Apple Vision recovered the exact dummy URI from the rendered
 matrix. `make lint typecheck test` passed with 72 tests. This update affects
 the local onboarding command. The owner's phone pairing remains a private
 step.
+
+## 2026-11-24T08:18:18Z — Single authenticator attempt
+
+CloudTrail showed that each of the owner's previous three submissions had
+received `Code mismatch` in the enrollment verification operation. They
+were retries of one challenge, with no MFA factor enrolled. The Mac clock
+was within 0.08 seconds of the Cognito HTTP response date. The onboarding
+operator command now displays a QR with a unique setup ID, prompts exactly
+once, and compares the entered code to that key locally. A match results
+in a single Cognito verification request with SDK retries disabled. The
+disposable-account smoke verified a locally matched enrollment and a
+subsequent real TOTP challenge, then disabled the test account. The final
+lint, typecheck and all 73 tests passed. The permanent profile was not
+modified by the validation.

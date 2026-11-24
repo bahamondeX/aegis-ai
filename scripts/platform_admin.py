@@ -1,15 +1,19 @@
 """Invite and onboard the platform administrator using private Cognito delivery."""
 
 import argparse
+import hmac
 import secrets
 import subprocess
 import sys
+from base64 import b32decode
 from datetime import UTC, datetime
 from getpass import getpass
 from pathlib import Path
-from urllib.parse import quote
+from time import time
+from urllib.parse import quote, urlencode
 from uuid import UUID
 
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from backend.identity import ADMIN_EMAIL, ADMIN_USERNAME, Audit, Decision, Status, attributes
@@ -79,7 +83,7 @@ def verify_admin_email(client, access: str) -> None:
             print("The code expired. Cognito sent a new verification email.")
 
 
-def display_authenticator_setup(uri: str, setup_key: str) -> None:
+def display_authenticator_setup(uri: str, setup_key: str, entry: str) -> None:
     # Keep the enrollment secret in stdin and the owner's terminal only.
     with open("/dev/tty", "w") as terminal:
         try:
@@ -119,25 +123,47 @@ def display_authenticator_setup(uri: str, setup_key: str) -> None:
                         previous = pair
                     line.append("▀")
                 print("".join(line) + "\033[0m", file=terminal)
-        print(f"Manual setup key for {ADMIN_EMAIL}: {setup_key}", file=terminal)
+        print(f"Use the new authenticator entry named {entry}.", file=terminal)
+        print(f"Manual setup key for {entry}: {setup_key}", file=terminal)
         print("Keep the QR and setup key private.", file=terminal)
 
 
-def verify_admin_totp(client, access: str) -> None:
-    for attempt in range(3):
-        try:
-            result = client.verify_software_token(
-                AccessToken=access,
-                UserCode=getpass("Current six-digit code from your authenticator: ").strip(),
-            )
-            if result.get("Status") == "SUCCESS":
-                return
-        except client.exceptions.EnableSoftwareTokenMFAException:
-            if attempt == 2:
-                raise
-        if attempt < 2:
-            print("Check the authenticator entry for this setup and try its next code.")
-    raise DataError("Cognito could not verify the authenticator")
+def totp_code(key: bytes, step: int) -> str:
+    digest = hmac.digest(key, step.to_bytes(8, "big"), "sha1")
+    offset = digest[-1] & 15
+    value = int.from_bytes(digest[offset : offset + 4], "big") & 0x7FFF_FFFF
+    return f"{value % 1_000_000:06d}"
+
+
+def verify_admin_totp(client, access: str, setup_key: str, entry: str) -> None:
+    key = b32decode(setup_key + "=" * (-len(setup_key) % 8))
+    code = getpass(f"Six-digit code from {entry} (Enter cancels): ").strip()
+    if not code:
+        raise DataError("authenticator setup was cancelled")
+    step = int(time()) // 30
+    if not (
+        len(code) == 6
+        and code.isascii()
+        and code.isdecimal()
+        and any(
+            hmac.compare_digest(code, totp_code(key, candidate))
+            for candidate in range(max(0, step - 1), step + 2)
+        )
+    ):
+        raise DataError(
+            f"Code does not match {entry} at the current time. Cognito was not contacted."
+        )
+    try:
+        result = client.verify_software_token(AccessToken=access, UserCode=code)
+    except (
+        client.exceptions.CodeMismatchException,
+        client.exceptions.EnableSoftwareTokenMFAException,
+    ):
+        raise DataError(
+            "Cognito rejected a locally matched code. Check device time before retrying."
+        ) from None
+    if result.get("Status") != "SUCCESS":
+        raise DataError("Cognito did not verify the authenticator")
 
 
 def main() -> None:
@@ -250,11 +276,27 @@ def main() -> None:
         if "SOFTWARE_TOKEN_MFA" not in client.admin_get_user(**identity).get(
             "UserMFASettingList", []
         ):
-            enrollment = client.associate_software_token(AccessToken=access)
-            label = quote(f"AEGIS:{ADMIN_EMAIL}", safe="")
-            uri = f"otpauth://totp/{label}?secret={enrollment['SecretCode']}&issuer=AEGIS"
-            display_authenticator_setup(uri, enrollment["SecretCode"])
-            verify_admin_totp(client, access)
+            setup_key = client.associate_software_token(AccessToken=access)["SecretCode"]
+            setup = f"Admin {secrets.token_hex(3).upper()}"
+            entry = f"AEGIS {setup}"
+            label = f"AEGIS:{quote(setup, safe='')}"
+            params = urlencode(
+                {
+                    "secret": setup_key,
+                    "issuer": "AEGIS",
+                    "algorithm": "SHA1",
+                    "digits": 6,
+                    "period": 30,
+                }
+            )
+            display_authenticator_setup(f"otpauth://totp/{label}?{params}", setup_key, entry)
+            verifier = session.client(
+                "cognito-idp",
+                config=SDK_CONFIG.merge(
+                    Config(retries={"mode": "standard", "total_max_attempts": 1})
+                ),
+            )
+            verify_admin_totp(verifier, access, setup_key, entry)
         client.set_user_mfa_preference(
             AccessToken=access,
             SoftwareTokenMfaSettings={"Enabled": True, "PreferredMfa": True},
@@ -269,6 +311,8 @@ def main() -> None:
         raise SystemExit(
             f"Cognito {error.operation_name} failed ({error.response['Error']['Code']})"
         ) from None
+    except DataError as error:
+        raise SystemExit(str(error)) from None
 
 
 if __name__ == "__main__":

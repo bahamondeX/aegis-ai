@@ -44,8 +44,10 @@ alone. The one-day invitation uses Cognito's `NEW_PASSWORD_REQUIRED`
 challenge. The mailbox owner completes the password change, independently
 verifies the address and enrolls TOTP from a private interactive terminal.
 When the QR code appears, scan it from the phone's authenticator and enter
-the current code from the new AEGIS entry. The displayed key supports manual
-time-based setup if the terminal QR renderer is unavailable.
+the current code from the AEGIS entry with the setup ID shown in Terminal.
+The command prompts once for enrollment and checks the code locally before
+sending a single verification request to Cognito. The displayed key supports
+manual time-based setup if the terminal QR renderer is unavailable.
 
 ```sh
 JSII_RUNTIME_PACKAGE_CACHE=disabled uv run --locked --no-sync python -m scripts.platform_admin onboard
