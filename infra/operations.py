@@ -140,6 +140,23 @@ def stack_outputs(session: boto3.Session, settings: Settings) -> dict[str, str]:
     return outputs
 
 
+def scoped_catalog(session: boto3.Session, settings: Settings) -> GlueCatalog:
+    # PyArrow's S3 filesystem has a separate credential chain from boto3.
+    credentials = session.get_credentials().get_frozen_credentials()
+    return GlueCatalog(
+        "aegis",
+        client=session.client("glue", config=SDK_CONFIG),
+        **{
+            "s3.region": settings.region,
+            "s3.connect-timeout": "5",
+            "s3.request-timeout": "30",
+            "s3.access-key-id": credentials.access_key,
+            "s3.secret-access-key": credentials.secret_key,
+            "s3.session-token": credentials.token,
+        },
+    )
+
+
 def check_stack_owner(stack: dict) -> None:
     tags = {item["Key"]: item["Value"] for item in stack["Tags"]}
     if tags.get("Project") != "AEGIS" or tags.get("Environment") != "dev":
@@ -392,21 +409,7 @@ def run(command: str, root: Path, snapshot: UUID | None, environment: dict[str, 
     if command == "secrets-sync":
         report("ssm.sync", parameters_written=sync_secrets(session, settings, outputs))
         return 0
-    # Use this command's already verified STS session for both Glue and
-    # PyArrow's S3 filesystem. The latter has its own credential chain.
-    credentials_ = session.get_credentials().get_frozen_credentials()
-    catalog = GlueCatalog(
-        "aegis",
-        client=session.client("glue", config=SDK_CONFIG),
-        **{
-            "s3.region": settings.region,
-            "s3.connect-timeout": "5",
-            "s3.request-timeout": "30",
-            "s3.access-key-id": credentials_.access_key,
-            "s3.secret-access-key": credentials_.secret_key,
-            "s3.session-token": credentials_.token,
-        },
-    )
+    catalog = scoped_catalog(session, settings)
     bucket = outputs["LakeBucket"]
     if command == "init-tables":
         tables = init_tables(catalog, settings.database, f"s3://{bucket}/iceberg")

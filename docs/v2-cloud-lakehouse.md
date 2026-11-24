@@ -189,3 +189,18 @@ an interruption, the coordinator reuses committed dates. Inspect each
 unsettled dispatch before reserving its next attempt. The `--since` and
 `--limit` options can isolate a specific date. Each attempt has one durable
 dispatch record, and the campaign caps each date at three reservations.
+
+Once all date receipts are present, `scripts.v2_epss_silver_bulk` registers
+the verified, immutable Parquet as Iceberg data files in bounded windows.
+This avoids retransferring the archive through the operator machine. The
+schema makes row-local `evidence_key` optional and stores each original
+S3 object reference in the versioned release receipt by score date. The
+table disables Iceberg garbage collection because Bronze files are shared
+source artifacts. The prior snapshots retain their original rows.
+
+The staging Gold mart queries at most 16 dates per Athena statement. It
+compares score counts, null-percentile counts and models against each date
+receipt. Its median and p95 are explicitly approximate. The complete
+snapshot and Gold object references are committed together after all dates
+reconcile. The `--probe-date 2021-05-14` option reproduces the isolated
+external-file compatibility check.

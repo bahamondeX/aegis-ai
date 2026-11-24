@@ -1242,3 +1242,14 @@ all three sources. The two Athena statements scanned 2,090,649 bytes each
 in 2,290 ms and 1,231 ms. Source capture evidence remains separately
 addressable. This index does not activate a production profile or ranking.
 See `data/evidence/v2-activation/v2-catalog-silver.json`.
+
+## 2026-11-24T14:28Z — Direct Bronze-to-Iceberg attachment verified
+
+`uv run --locked --no-sync python -m scripts.v2_epss_silver_bulk --bundle data/evidence/v2-activation/history-bundle.json --evidence data/evidence/v2-activation --probe-date 2021-05-14`
+exited 0. The external Iceberg partition references the existing verified
+S3 Parquet. Athena read all 66,310 EPSS v1 rows and reproduced the source
+model and missing percentile counts at snapshot `6968301362334145902`.
+The query scanned 89,257 bytes in 1,250 ms. Rerunning attachment changed
+zero partitions. An earlier local prototype incorrectly URL-encoded the
+file path. The corrected prototype and the live AWS probe both pass.
+The full archive promotion is queued behind verified campaign completion.
