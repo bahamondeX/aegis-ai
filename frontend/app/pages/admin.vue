@@ -26,7 +26,11 @@ const error = ref('')
 const audit = ref<AuditEntry[]>([])
 const selected = ref<WorkspaceAccount>()
 const confirmation = ref<{ user: WorkspaceAccount, action: Action }>()
-const rows = computed(() => registry.value?.users.filter(user => !pendingOnly.value || user.status === 'PENDING_APPROVAL') ?? [])
+const active = computed(() => registry.value?.users.filter(user => user.enabled) ?? [])
+const disabled = computed(() => (registry.value?.total ?? 0) - active.value.length)
+const rows = computed(() => pendingOnly.value
+  ? active.value.filter(user => user.status === 'PENDING_APPROVAL')
+  : registry.value?.users ?? [])
 const labels: Record<AccountStatus, string> = {
   PENDING_APPROVAL: 'Pending approval',
   APPROVED: 'Approved',
@@ -117,10 +121,11 @@ onMounted(() => { if (auth.signedIn.value) void refresh() })
     </section>
     <template v-else>
       <dl v-if="registry" class="admin-kpis">
-        <div class="panel"><dt>Total users</dt><dd>{{ registry.total }}</dd></div>
-        <div class="panel"><dt>Pending approvals</dt><dd>{{ registry.pending }}</dd></div>
-        <div class="panel"><dt>Approved</dt><dd>{{ registry.approved }}</dd></div>
-        <div class="panel"><dt>Suspended</dt><dd>{{ registry.suspended }}</dd></div>
+        <div class="panel"><dt>Registered accounts</dt><dd>{{ registry.total }}</dd></div>
+        <div class="panel"><dt>Pending approvals</dt><dd>{{ active.filter(user => user.status === 'PENDING_APPROVAL').length }}</dd></div>
+        <div class="panel"><dt>Approved</dt><dd>{{ active.filter(user => user.status === 'APPROVED').length }}</dd></div>
+        <div class="panel"><dt>Suspended</dt><dd>{{ active.filter(user => user.status === 'SUSPENDED').length }}</dd></div>
+        <div class="panel"><dt>Disabled in Cognito</dt><dd>{{ disabled }}</dd></div>
       </dl>
       <section class="panel admin-directory" aria-labelledby="directory-heading">
         <div class="identity-actions">
@@ -138,11 +143,15 @@ onMounted(() => { if (auth.signedIn.value) void refresh() })
                 <th scope="row">{{ user.email ?? user.username }}<small>{{ user.username }}</small></th>
                 <td>{{ timestamp.format(new Date(user.registered_at)) }}</td>
                 <td>{{ user.provider === 'email' ? 'Email' : user.provider }}</td>
-                <td>{{ labels[user.status] }}<small v-if="!user.email_verified">Email unverified</small></td>
+                <td>
+                  {{ user.enabled ? labels[user.status] : 'Disabled in Cognito' }}
+                  <small v-if="!user.enabled">Last decision · {{ labels[user.status] }}</small>
+                  <small v-if="!user.email_verified">Email unverified</small>
+                </td>
                 <td>
                   <div class="identity-actions">
                     <UButton
-                      v-for="action in user.username === 'aegis-platform-admin' ? [] : actions[user.status]"
+                      v-for="action in !user.enabled || user.username === 'aegis-platform-admin' ? [] : actions[user.status]"
                       :key="action" variant="outline" size="xs" class="admin-action"
                       :disabled="busy || ((action === 'approve' || action === 'restore') && (!user.email_verified || !user.enabled))"
                       @click="confirmation = { user, action }"
