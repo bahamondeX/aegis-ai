@@ -156,3 +156,12 @@ Component timing logs correlate by investigation trace ID. DuckDB/Athena
 read timings sit inside the MCP timing, while checkpoint updates and model
 selection have their own spans. Browser-to-first-event and full stream timing
 remain end-to-end measurements. Concurrent spans may overlap.
+
+## Final runtime revision
+
+The final deployment updates the existing runtime in place. It reads the one
+pinned CISA archive object for mitigation and checks Cognito plus the encrypted
+subject decision before allowing direct invocations and MCP reads. Active
+streams recheck current authorization. The authorized runtime, checkpoint
+bucket, release and model budget remain the same physical resources.
+[Identity runbook](identity-management.md) · [Execution record](../STATUS.md)

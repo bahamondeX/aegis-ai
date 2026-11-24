@@ -17,15 +17,15 @@ Canadian context evidence. `STATUS.md` has timestamps and command exits.
 | E06 Prompt injection | PASS. The model receives vetted claim keys and typed fact text. It can return only known keys. Tests reject unknown selections and malformed outputs. Archived text enters only the rendered, cited claim. | Unit tests use isolated SDK and model stubs. |
 | E07 Timeout, throttle, budget | PASS for bounded local tests with stubbed provider failures. Existing live budget denial verified deterministic fallback and zero model calls. | No new provider throttle induced. |
 | E08 Idempotency and replay | PASS. Exact suffix replay, conflicts and owner isolation on real snapshot across API, local runtime and relay. | Prior AgentCore replay retained as historical proof. |
-| E09 Cancellation and SSE ordering | PASS. Active cancellation, disconnect handling, strict event IDs, one terminal event. | Hosted disconnect/timeout behavior needs cloud measurement. |
+| E09 Cancellation and SSE ordering | PASS. Active cancellation, disconnect handling, strict event IDs, one terminal event. | Hosted explicit cancellation passed. Hosted disconnect and provider timeout behavior were outside the executed case. |
 | E10 Auth | PASS. Expiry, issuer, token type, client, workspace and owner tests across the enabled local paths. | Prior Cognito and AgentCore remote tests retained. Hosted security checks pending. |
-| E11 Athena parity | Prior PASS for six read shapes, seven queries, 10,210,468 bytes on the same release. Current extension builds the pinned detail query, checks local real replay and exercises the new read in DuckDB. | BLOCKED for new live CVE-detail parity until verified remaining G2 allowance is available. |
+| E11 Athena parity | Prior PASS for six read shapes, seven queries, 10,210,468 bytes on the same release. Current extension builds the pinned detail query, checks local real replay and exercises the new read in DuckDB. | Final live CVE-detail parity passed after budget reconciliation. See the execution below. |
 | E12 UI state | PASS. Typed SSE filter proposal, atomic application, stale event and manual override tests. Chromium verified the proposal and subsequent manual country filters. | Local application only. |
 | E13 Worldwide and country filters | PASS. Chromium saw real world contours, a nonblank tactical map, Peru and Canada via one country selector and desktop/mobile layouts. | `world-layers.png`, `tactical.png`, `mobile.png`. |
 | E14 Independent network context | PASS. Canada regulator coverage and Ontario drill-down remained separate from CVE filters and exposure availability. Peru showed uncovered network context. | Positive data verified only for the qualified Canadian series. |
 | E15 Estimated vs verified locations | PASS for no-fabrication and disclosure checks. Public projection emits no observations or private fields. | Positive aggregate, verified-site and optional private incident scenarios NOT RUN. No qualified authorized observations available. |
 | E16 Coverage and category semantics | PASS for unavailable/null versus measured-zero policy and explicit categories. Chromium saw independent legends and no estimated or private features. | Positive real measured-zero, sensor and incident cases NOT RUN. |
-| E17 Mitigation and privacy | PASS locally. Graph → exact CVE card → authenticated four-node SSE → editable handoff, with the same release, exact CVE and Canada scope. No outbound action was observed. Unknown scope and applicability remained explicit. | Hosted verification and Nova Micro on the extended request pending. |
+| E17 Mitigation and privacy | PASS locally. Graph → exact CVE card → authenticated four-node SSE → editable handoff, with the same release, exact CVE and Canada scope. No outbound action was observed. Unknown scope and applicability remained explicit. | Both live model and hosted mitigation passed. See the final deployment evidence. |
 
 ## Grounding and measured latency
 
@@ -75,3 +75,73 @@ Artifacts are `data/evidence/continuation/grounding-acceptance.json`,
   the release together. The deployed AgentCore and Cognito checks remain
   independently verified. The complete local path is reproducible without
   new model charges or managed infrastructure.
+
+## Final deployment extension
+
+| Case | Executed evidence | Open acceptance |
+| --- | --- | --- |
+| E11 CVE detail | PASS. Same-release DuckDB/Athena detail parity for Peru scope, including CISA guidance. Eight queries scanned 5,488,587 bytes. | Query log in `data/evidence/final/athena-detail.log`. |
+| E17 Nova Micro mitigation | PASS on the local HTTP boundary with real Nova Micro Converse inference. Two same-CVE Canada-scoped cases grounded 7 of 7 claims against pinned records. | Hosted CVE card to mitigation also emitted a live Nova Micro report. See below. |
+| E18 Registration | Local policy tests confirm verified email remains pending and browser tokens are client-bound. | Native Chromium registration and email delivery verified. Email confirmation and a completed Google login require a mailbox or Google account owner. |
+| E19 Administrative authorization | Local RSA-signed fixture checks verify pending denial, current Cognito group and MFA, all four decisions and atomic audit. | The private invite and explicit group assignment are deployed. Owner MFA enrollment and hosted admin decisions are pending. |
+| E20 Revocation and recovery | Local fixture checks reject a pre-suspension token after suspension and restoration, and reject the logged-out session. | Real browser logout passed and revoked the previous access token. The recovery page rendered, while the email-code challenge remains pending. |
+| E21 Direct service and owner isolation | Prior G6 baseline covered real AgentCore workspace/owner separation. The new local gateway checks deny unapproved accounts and mismatched subjects. | Hosted pending user blocked at CloudFront API and direct AgentCore. Peer replay on the approved path returned an invalid cursor in the peer namespace. |
+
+Live Nova Micro cases saw first browser-independent HTTP events at 7.95 and
+8.61 ms, full local streams at 1,059.22 and 730.10 ms, and Converse calls at
+795 and 466 ms. Observed usage was 444 input and 100 output tokens over two
+requests. The adjudicator matched evidence identifiers, source records,
+checksums and text. This is local live-model evidence and uses a different
+denominator from the historical 22 of 22 deterministic checks.
+
+
+## Hosted production evidence
+
+The assigned workspace is [AEGIS on CloudFront](https://d13u8qrh8t434t.cloudfront.net).
+The first hosted browser case passed TLS, login with S256 PKCE, pending
+status, absence of stored tokens, unauthenticated admin refusal and pending
+denial at the API and direct AgentCore. The controlled native account
+registered through the frontend and Cognito delivered its code. The connected
+mailbox withheld the code from automation. Direct registration of the
+reserved administrator email was rejected by the live pre-sign-up trigger.
+The Google route reached its real sign-in page and no federated user was
+observed at the acceptance check.
+
+The approved browser session loaded the pinned Iceberg release. Canada
+returned the qualified network context and Peru returned unavailable context.
+The geographic exposure list was empty in both scopes. The selected
+relationship opened its CVE card. The real managed response produced nine
+ordered events and one completed terminal event. The finished report emitted
+4 of 4 supported factual claims, independently compared to the archived
+source records and checksums. The first response headers arrived in 2,029.22 ms,
+the visible progress in 2,996.45 ms, and the report in 16,216.16 ms. Nova Micro
+spent 448 ms and used 222 input and 59 output tokens, estimated USD 0.00001603.
+The owner replayed the exact suffix. The browser test's initial peer assertion
+expected 404. AgentCore actually wrapped 409 for the absent peer-owned cursor,
+consistent with its owner-derived namespace. The captured peer response
+contained no investigation result.
+
+The Lambda startup correction recorded one cold report with 9,817.23 ms of
+initialization and 30,199.66 ms of invocation. Two warm API auth refusals took
+2.24 and 1.89 ms of Lambda execution. Client HTTP observations were 669 ms
+through CloudFront and 309 ms through the direct API. These service and client
+measurements are distinct.
+
+The isolated session test passed in 40.1 seconds. It verified a live cancel
+request returned 200, the stream emitted exactly one `cancelled` terminal
+event, a peer could not cancel the owner's journal, and a browser logout
+invalidated the old API token. Its evidence is
+`data/evidence/final/production-session-checks.json`.
+
+Final G7 remains blocked on permanent-administrator activation and
+administrative lifecycle verification in the browser, native mailbox
+confirmation and password reset, and a complete Google federation flow.
+The owner can complete these checks without changing infrastructure or
+sharing authentication secrets. Notifications and geographic source-dependent
+positive cases remain outside mandatory activation.
+
+The deployed Cognito challenge check used a disposable native identity and
+verified both `NEW_PASSWORD_REQUIRED` and an enforced subsequent TOTP
+challenge. The account was disabled. This evidence exercises the same pool
+and client used by the permanent administrator, whose private onboarding
+remains pending. [Execution record](../STATUS.md)

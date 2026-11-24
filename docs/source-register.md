@@ -39,3 +39,13 @@ coverage unavailable. The network source publishes Canadian LTE population
 coverage. Country shading identifies the reporting geography. Selecting a
 province displays that province's value while retaining the country outline.
 Natural Earth country outlines carry no provider or vulnerability inference.
+
+## Final deployment scope
+
+The final deployment retains the qualified Canadian CRTC historical LTE
+population coverage companion from release `4e13ca6b-c2e1-4407-88bc-c362da7dbacb`.
+Cloud publication uses the reviewed SHA-256
+`59612187c96f7f0d53757891abe740a730238fed4fed7b756da8a9d9474f4ceb`.
+No further geographic providers or datasets are in scope. Canada is the
+qualified network-context geography. CVE geographic exposure is unavailable.
+Private confirmed tenant sites and SOC incident views remain disabled.

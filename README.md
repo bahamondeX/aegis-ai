@@ -234,9 +234,21 @@ actual production-mode UI under `data/evidence/g5-extension/`.
 [Mobile view](data/evidence/g5-extension/mobile.png).
 [Evaluation matrix](docs/evaluation.md) · [Execution evidence](STATUS.md)
 
-## Hosted pilot preparation
+## Hosted workspace and identity
 
-The existing AgentCore and Cognito resources have verified baseline evidence.
-The separate hosting stack and static build are prepared locally. The hosted
-UI and standalone cloud API require separate approval and an authenticated
-cloud smoke before G6 and final G7 close. [Hosting runbook](docs/hosting.md)
+[Open the AEGIS AI workspace](https://d13u8qrh8t434t.cloudfront.net).
+
+The hosted design uses a private S3 origin behind CloudFront, a regional
+streaming API and the existing AgentCore runtime. Native registrations and
+Google identities require administrative approval. Verified accounts can
+check their status while waiting. Administrators manage access and audit
+history from `/admin`.
+
+The [execution record](STATUS.md) lists the deployed resources and completed
+acceptance checks. The [hosting runbook](docs/hosting.md) covers the scoped
+rollout and teardown. The [identity runbook](docs/identity-management.md) covers
+administrator onboarding and email operations.
+
+The [technical case study](docs/case-study.md) and [demonstration script](docs/final-demo.md)
+cover the deployed intelligence path. The [evaluation report](docs/evaluation.md)
+records end-to-end evidence and the identity acceptance still pending.

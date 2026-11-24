@@ -684,3 +684,123 @@ Conditional aggregate exposure and optional private site and SOC incident
 positive tests remain unavailable. The updated IMPLEMENTATION_PLAN.md
 remains the user's original working-tree edit with its acceptance criteria
 intact. The root .env remains ignored at mode 600.
+
+## 2026-11-24T07:11:00Z — Final deployment resumed and live evaluation extended
+
+Resumed `7e191f1`, `4d8c092`, `3f8b7b8` and `7176651`. G1–G5
+remain closed. The identity and hosting implementation is commit `690555e`.
+The user's implementation plan remains a working-tree edit. The separately
+authorized G6 USD 5 ceiling was persisted in the ignored mode-600 `.env`
+alongside the existing USD 15 Lakehouse, USD 5 Bedrock and USD 5 AgentCore
+scopes. No credential was changed.
+
+| Command or operation | Exit | Evidence and outcome |
+| --- | --- | --- |
+| `make hosting-preflight` | 0 | Exact STS account ending 6271, profile `default`, `us-east-1`, prefix `aegis-dev`. AWS MCP verified ownership tags on Lakehouse, bootstrap, Cognito and AgentCore. Scheduler stayed enabled at six hours. Athena retained its encrypted enforced workgroup and 64 MiB scan cutoff. |
+| `make lint typecheck test` | 0 | 65 tests, including signed-token lifecycle, stale-session refusal, MFA and admin guard. `data/evidence/final/final-python.log`. |
+| `make lint-ui typecheck-ui` | 0 | Nuxt lint and strict typecheck. Existing Nuxt DevTools warning. `data/evidence/final/{final-code-checks,hosted-contract-checks}.log`. |
+| `make synth-hosting synth-agent`, pinned `cdk diff --no-change-set`, `cfn-lint` | 0 | Live differences reviewed for each stack. cfn-lint reported redundant role-dependency warnings. Evidence in `data/evidence/final/`. |
+| `python -m infra.agent_deploy identity --review-only --enable-google` | 0 | CloudFormation reports `Replacement: False` for the existing Pool and Browser client. The creation review for hosting and runtime update review also passed. `data/evidence/final/{identity,runtime,hosting}-review.log`. |
+| `python -m scripts.verify_g3_athena --extension --confirmed-remaining-usd 5` | 0 | One live detail case on the pinned release, eight queries, 5,488,587 bytes. `data/evidence/final/athena-detail.log`. |
+| `make eval-g7` | 0 | 22/22 deterministic factual claims grounded, two correct claim-free cases, zero model calls. `data/evidence/final/grounding-local.json`. |
+| `python -m scripts.evaluate_release --bedrock` | 0 | Two local HTTP investigations with live Nova Micro. 7/7 facts supported, 444 input and 100 output tokens, estimated USD 0.00002954. First events 7.95/8.61 ms, total 1,059.22/730.10 ms, model 795/466 ms. `data/evidence/final/grounding-bedrock.json`. |
+| `python -m infra.agent_deploy runtime` | 0 on retry | Existing runtime revision 2 READY, seven-day logs, immutable ARM64 image digest `sha256:28e47039…149a82`. `data/evidence/final/runtime-deploy-r2.log`. |
+| `python -m infra.hosting_deploy google-mapping` | 0 | Existing Google provider retained. Scoped email and email verification mappings reconciled without logging or overwriting credentials. Google sign-in acceptance requires a successful federated login. |
+
+Pre-rollout inference ledgers reserved USD 0.0008960 locally and
+0.0005376 in AgentCore against their existing USD 0.05 allocations. Account
+Cost Explorer gross usage by relevant services (before credits) was taken
+as a conservative bound since the Project cost-allocation tag is inactive.
+The Lakehouse subset was USD 4.0433290793, Bedrock USD 0.12495946, AgentCore
+USD 0.155146868, and API Gateway USD 0.000643. These are account-level
+service totals and may include unrelated workloads. The relevant services
+were net USD 0 or credit rounding at the time of the query. After the
+forward Lakehouse operating and hosted-pilot reservations, USD 4.96967
+remained in the conservative model. The runtime retained USD 4.24485 after
+its USD 0.60 reservation. A USD 1 hosting reservation covers the USD 0.27
+bounded monthly estimate and rollout/identity traffic. Actual
+project-attributable billed spend remains unavailable. See
+`data/evidence/final/cost-scope.txt`.
+
+The first Docker invocation stalled while resolving public registry
+credentials. A separate buildx builder timed out at 58 seconds. The retry
+used a temporary Docker config to avoid the desktop credential helper and
+published only to the owned ECR repository. The first hosting invocation
+stopped at the empty, untagged CloudFormation review placeholder. Verified
+zero resources and change sets, then retried creation in the owned account.
+The hosting change set subsequently created the API stage and CloudFront
+resources. G6 and final G7 acceptance are pending hosted verification.
+
+## 2026-11-24T07:28:00Z — Hosting deployed and managed investigation verified
+
+Assigned workspace [https://d13u8qrh8t434t.cloudfront.net](https://d13u8qrh8t434t.cloudfront.net).
+CloudFront `E1K9JTWAXO2IQS` reports Deployed, origin access control and a
+60-second API origin response timeout. The UI bucket blocks all public
+access. The regional REST API `3tias9rsre` uses the verified streaming
+integration with a 65-second limit. Hosting, identity and AgentCore stacks
+are `UPDATE_COMPLETE`. The Cognito physical pool and browser client are
+the original IDs. Rechecked exact hosted and loopback callbacks, OAuth Code
+flow, the native and Google providers, and token revocation. The runtime is
+revision 2. The pinned release and verified Canadian companion remain in
+the existing lake. No domain was purchased and no DNS records changed.
+
+| Command or observation | Exit | Evidence |
+| --- | --- | --- |
+| `python -m infra.hosting_deploy deploy` | 0 on corrected rollout | Stack created after verifying the empty preview placeholder. API readiness initially timed out. In-place update enabled async Web Adapter initialization, deferred cloud reader initialization, and allocated 1.5 GiB. The reviewed 60-second CloudFront origin update completed. `hosting-deploy-r2.log`, `hosting-readiness-deploy.log`, `edge-timeout-deploy.log`. |
+| `python -m infra.agent_deploy identity --hosted-origin <assigned-origin> --enable-google` | 0 | Existing pool and app client updated in place. Cognito registered native/Google entry points and kept exact OAuth allowlists. `identity-deploy.log`. |
+| `python -m scripts.platform_admin invite` | 0 twice | Cognito issued the administrator invitation to the private mailbox the first time. The repeat only assigned the already present group and did not send a new invitation or set a password. Permanent user remains enabled in `FORCE_CHANGE_PASSWORD` awaiting verified mailbox and TOTP enrollment. |
+| `make deploy-ui` | 0 | Latest static app published 85 files. The asset scan found no source maps, AWS credential markers, private-key markers or local backend configuration in the served bundle. `native-ui-publish.log`. |
+| Direct endpoint and CloudFront probes | 0 | Both returned 401 without a bearer. Unapproved-origin preflights returned 403 and no CORS allow header. `direct-and-edge-auth.log`. |
+| `make smoke-cloud` | Partial, exit 2 | Hosted HTTPS, PKCE, pending view, no browser-stored access or refresh tokens, unauthorized admin and protected direct API and AgentCore denial case passed. The approved journey hit an incorrect drawer selector before starting an investigation. `production-smoke.log`. |
+| `python -m scripts.smoke_cloud --journey-only` | Partial, exit 1 | Corrected graph-to-card journey ran live. Nine ordered SSE events and one completed terminal event. Owner replay returned the exact suffix. Peer replay yielded a wrapped 409 for an absent cursor in the peer namespace. The assertion expected 404 and was corrected once the branch was confirmed. `production-journey-r2.log`, `production-mitigation.json`. |
+| `python -m scripts.evaluate_release --hosted-evidence data/evidence/final/production-mitigation.json` | 0 | 4/4 hosted factual claims supported. First response headers 2,029.22 ms, visible progress 2,996.45 ms, report 16,216.16 ms, model 448 ms. 222 input and 59 output tokens. Estimated model cost USD 0.00001603. `grounding-hosted.json`. |
+| `python -m scripts.smoke_cloud --session-only` | 0 | Passed in 40.1 s. Explicit cancellation returned 200 and one cancelled terminal event. Direct peer cancellation was denied. Browser logout invalidated the previous token. `production-session.log`, `production-session-checks.json`. |
+| Browser native and Google checks | Partial | Real native sign-up succeeded and Cognito's email arrived in the controlled mailbox. That connector withheld the one-time code. The temporary signup was disabled. The public attempt to register the reserved administrator was rejected by the Cognito trigger. Browser recovery showed the real Cognito form. Google reached its real sign-in page. No completed federated user or password recovery was observed. |
+
+One Lambda cold report recorded 9,817.23 ms initialization plus
+30,199.66 ms invoke time. Two warm anonymous authorization calls took
+2.24 and 1.89 ms within Lambda. End-to-end anonymous probes were 669 ms
+through CloudFront and 309 ms through direct API. Hosted mitigation used a
+different authenticated execution path. The revised illustrative monthly
+hosting estimate is USD 0.30 within the USD 1 rollout reservation and
+USD 5 hosting scope. Cost Explorer cannot attribute actual billed spend
+to this project. The modelled and observed usage amounts above are
+separate from invoice totals.
+
+The browser validation sets were disabled. The permanent administrator
+remains enabled and awaits private onboarding. Production captures show
+sign-in, registration, a redacted pending account, the command center, the
+CVE card and investigation progress in `data/evidence/final/`.
+Canada returned network context, Peru returned unavailable network context,
+and CVE geographic exposure was empty in both. Private confirmed sites
+and SOC incidents remain disabled.
+
+**G6 and G7 remain BLOCKED on owner-side identity acceptance.** Complete
+private administrator onboarding, actual approval/rejection/suspension
+from `/admin`, the native verification and recovery challenges, and
+Google sign-in with a controlled temporary Google identity. The dashboard,
+identity controls, managed SSE, verified Bedrock evidence and deployed
+services are available for those checks. Approval notifications remain
+disabled because SES has sandbox access with zero verified identities.
+
+## 2026-11-24T07:29:45Z — Temporary identity and cost reconciliation
+
+The deployed readiness and native signup corrections are in `a0b6e40`.
+`python -m scripts.verify_identity_challenge` passed on its second attempt.
+Cognito required `NEW_PASSWORD_REQUIRED` for a disposable account, confirmed
+the changed password, enrolled TOTP and required `SOFTWARE_TOKEN_MFA` on
+the next authentication. The first attempt reused the enrollment code and
+Cognito returned `ExpiredCodeException`. The corrected test waited for the
+next authenticator interval. Both disposable identities were disabled.
+Evidence is in `data/evidence/final/identity-challenges{,-r2}.log`.
+The permanent administrator still needs its own mailbox verification,
+password change and authenticator enrollment.
+
+Final inference ledger reservations were USD 0.0012544 locally and
+USD 0.0007168 in AgentCore. Each allocation remains USD 0.05. The final
+Python regression returned exit 0 with 65 tests, and lint, typecheck and
+the Nuxt static build passed. Safe CloudFront and direct denial checks and
+the authenticated cancellation run used the real cloud service. The
+original browser journey wrapper exited nonzero on its peer assertion.
+The direct peer cancellation and logout checks passed independently.
+G6 and G7 remain open on the owner-side identity cases listed above.

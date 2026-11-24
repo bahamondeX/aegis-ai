@@ -1,5 +1,6 @@
 """Measure grounding of actual local investigation output against independent archive records."""
 
+import argparse
 import asyncio
 import json
 import logging
@@ -15,6 +16,7 @@ import httpx
 
 from backend.api import create_app
 from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth, mint
+from backend.investigations.bedrock import approved_model
 from backend.investigations.contracts import (
     AnalyticsEvent,
     DoneEvent,
@@ -77,6 +79,8 @@ async def streams(
     key: str,
     reader: SnapshotReader,
     cves: Sequence[str],
+    *,
+    mitigation_only: bool = False,
 ) -> list[tuple[str, list[Event], dict]]:
     observations = []
     async with httpx.AsyncClient(
@@ -92,7 +96,10 @@ async def streams(
                 {"question": "Evidence of exposure?", "filters": {"country_iso2": "PE"}},
             ),
         ]
-        for cve, country in zip(cves, [None, "PE", "CA", None], strict=True):
+        countries = ["CA", "CA"] if mitigation_only else [None, "PE", "CA", None]
+        if mitigation_only:
+            cases = []
+        for cve, country in zip(cves, countries, strict=True):
             selected = await client.get(
                 f"/v1/cves/{cve}",
                 params={
@@ -123,7 +130,11 @@ async def streams(
 
 
 def evaluate(
-    root: Path, reader: SnapshotReader, observations: list[tuple[str, list[Event], dict]]
+    root: Path,
+    reader: SnapshotReader,
+    observations: list[tuple[str, list[Event], dict]],
+    *,
+    live_model: bool = False,
 ) -> dict:
     capture = selected_snapshot(root, reader.snapshot)
     run = load_run(capture)
@@ -137,7 +148,11 @@ def evaluate(
     for name, frames, spans in observations:
         report = next(frame.payload for frame in frames if isinstance(frame, ReportEvent))
         analytics = next(frame.payload for frame in frames if isinstance(frame, AnalyticsEvent))
-        assert report.analysis_mode == "deterministic" and not report.usage
+        if live_model:
+            assert report.analysis_mode == "bedrock" and report.usage
+            assert all(item.input_tokens and item.output_tokens for item in report.usage)
+        else:
+            assert report.analysis_mode == "deterministic" and not report.usage
         assert report.snapshot_id == reader.snapshot and report.score_date == score_date.date()
         assert analytics.geography == "unavailable" and not analytics.observations
         evidence = {
@@ -211,7 +226,7 @@ def evaluate(
                 "unsupported": failures,
                 "geographic_observations": len(analytics.observations),
                 "analysis_mode": report.analysis_mode,
-                "usage": [],
+                "usage": [usage.model_dump(mode="json") for usage in report.usage],
                 **spans,
             }
         )
@@ -220,32 +235,67 @@ def evaluate(
     assert total > 0
     return {
         "observed_at": datetime.now(UTC).isoformat(),
-        "environment": "local-loopback",
+        "environment": "local-loopback-live-model" if live_model else "local-loopback",
         "snapshot": str(reader.snapshot),
         "cases": cases,
         "grounded": grounded,
         "factual_claims": total,
         "fraction": grounded / total,
         "claim_free_responses": sum(case["claims"] == 0 for case in cases),
-        "paid_calls": 0,
+        "paid_calls": sum(item["attempts"] for case in cases for item in case["usage"]),
     }
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--bedrock", action="store_true", help="Run two bounded live mitigation requests"
+    )
+    parser.add_argument("--hosted-evidence", type=Path)
+    args = parser.parse_args()
     logging.getLogger("aegis.timing").setLevel(logging.INFO)
     env = project_environment()
     root = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
     reader = SnapshotReader.duckdb(root, configured_snapshot(env))
+    if args.hosted_evidence:
+        artifact = json.loads(args.hosted_evidence.read_text())
+        frames = [ADAPTER.validate_python(event) for event in artifact["frames"]]
+        result = evaluate(
+            root,
+            reader,
+            [
+                (
+                    "mitigation/hosted",
+                    frames,
+                    {
+                        "first_header_ms": artifact["firstHeaderMs"],
+                        "browser_completion_ms": artifact["browserCompletionMs"],
+                    },
+                )
+            ],
+            live_model=True,
+        )
+        result["environment"] = "cloudfront-api-gateway-agentcore"
+        print(json.dumps(result))
+        if result["fraction"] < 0.95:
+            raise SystemExit("Hosted grounding minimum not met")
+        return
     cves = [row.cve_id for row in reader.vulnerabilities(Filters(limit=4)).data]
+    if args.bedrock:
+        cves = [cves[0], cves[0]]
     key = secrets.token_urlsafe(48)
     auth = Auth(issuer=LOCAL_ISSUER, audience=LOCAL_AUDIENCE, workspace="local", local_key=key)
     with TemporaryDirectory(prefix="aegis-grounding-") as directory:
-        service = InvestigationService(
-            SQLiteStore(Path(directory) / "checkpoint.db"), reader.snapshot
+        journal = SQLiteStore(Path(directory) / "checkpoint.db")
+        select = (
+            approved_model(env, SQLiteStore(root / "investigations.sqlite3"))
+            if args.bedrock
+            else None
         )
+        service = InvestigationService(journal, reader.snapshot, select)
         with live_server(create_app(reader, auth, service)) as base:
-            observed = asyncio.run(streams(base, key, reader, cves))
-        result = evaluate(root, reader, observed)
+            observed = asyncio.run(streams(base, key, reader, cves, mitigation_only=args.bedrock))
+        result = evaluate(root, reader, observed, live_model=args.bedrock)
     print(json.dumps(result))
     if result["fraction"] < 0.95:
         raise SystemExit("Grounding minimum not met")
