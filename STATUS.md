@@ -345,3 +345,50 @@ runbook documents retention and the workload estimate. Final billed cost was
 not measured.
 
 G3 local API and MCP implementation is next.
+
+## 2026-11-24T02:13:23Z — G3 PASS locally
+
+Implemented FastAPI and the official MCP Streamable HTTP server over one
+validated snapshot. REST uses seven routes and MCP exposes six typed read or
+proposal tools. The DuckDB reader uses bound values, a five-second query
+interrupt, and two concurrent read slots. The Athena adapter compiles the same
+allowlisted read shapes against pinned Iceberg versions. Read results carry the
+snapshot, EPSS score date, and source coverage. Geographic queries report
+unavailable coverage instead of substituting global CVEs.
+
+REST data endpoints and MCP require a signed bearer token for the configured
+workspace. The local mode checks loopback and verifies issuer, audience,
+expiry, and workspace. The development target generates a short-lived token
+in a Git-ignored file with mode 600. The application supports HTTPS JWKS
+configuration when supplied with an authorized issuer. The local verification
+used signed loopback credentials. The Athena adapter's additional G3 query
+shapes were verified by renderer unit tests. The live Athena parity recorded
+under G2 covers the G2 queries and deployed lakehouse.
+
+| Check | Exit | Time | Evidence under `data/evidence/g3/` |
+|---|---:|---:|---|
+| `make bootstrap` | 0 | 0.14 s | `bootstrap.log` |
+| `make lint` | 0 | 0.09 s | `lint-final.log` |
+| `make typecheck` | 0 | 0.72 s | `typecheck-final.log` |
+| `make test` | 0 | 9.92 s | `test.log` |
+| `make smoke-local` | 0 | 4.30 s | `smoke-final.log` |
+| `make verify-phase1` | 0 | 10.00 s | `verify-phase1.log` |
+| Isolated `make dev PORT=…` harness | 0 | 4.16 s | `dev.log` |
+
+The test suite passed 32 tests. The smoke made real HTTP requests to the
+loopback server and used the official MCP client for discovery and all six
+tool calls over Streamable HTTP. It checked the selected snapshot with 1,792
+KEV CVEs, evidence retrieval, stable ranking, invalid filters and excess
+limits, cross-workspace rejection, token expiry and audience, and unavailable
+geography. The development harness verified an authenticated KPI request and
+then terminated its own Make process, which reported signal exit 143 as
+expected during harness cleanup.
+
+The first smoke exited 1 because its client used a keyword argument unsupported
+by `httpx.Headers.update`. Corrected the header assignment and reran the
+transport successfully. The first `make test` and `make verify-phase1` attempts
+exited 2 on duplicate pytest module names. Renamed the unit module and reran
+both with exit 0. Raw evidence and credentials are excluded from Git.
+
+G3 is complete for local verification. Investigation streaming and live
+Bedrock integration belong to G4.

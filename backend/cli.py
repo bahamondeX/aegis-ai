@@ -1,0 +1,46 @@
+"""Run the authenticated local API or exercise it against the real snapshot."""
+
+import argparse
+import os
+import secrets
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from uuid import UUID
+
+import uvicorn
+
+from backend.api import create_app
+from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth, mint
+from backend.reader import SnapshotReader
+from pipelines.config import configured_snapshot, project_environment
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="AEGIS local API")
+    parser.add_argument("command", choices=("dev", "smoke"))
+    parser.add_argument("--snapshot", type=UUID)
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
+    env = project_environment()
+    root = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
+    snapshot = args.snapshot or configured_snapshot(env)
+    reader = SnapshotReader.duckdb(root, snapshot)
+    key = secrets.token_urlsafe(48)
+    auth = Auth(issuer=LOCAL_ISSUER, audience=LOCAL_AUDIENCE, workspace="local", local_key=key)
+    app = create_app(reader, auth)
+    if args.command == "smoke":
+        from backend.smoke import verify
+
+        verify(app, key, reader, root)
+        return
+    with NamedTemporaryFile(dir=root, prefix=".local-api-", delete=False) as file:
+        os.fchmod(file.fileno(), 0o600)
+        file.write(mint(key).encode() + b"\n")
+    target = root / "local-api.token"
+    os.replace(file.name, target)
+    print(f"AEGIS API http://127.0.0.1:{args.port} | 15-minute bearer token: {target}", flush=True)
+    uvicorn.run(app, host="127.0.0.1", port=args.port, proxy_headers=False)
+
+
+if __name__ == "__main__":
+    main()

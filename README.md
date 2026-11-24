@@ -94,3 +94,38 @@ This product uses data from the NVD API but is not endorsed or certified by the 
 The [lakehouse runbook](docs/lakehouse.md) covers local CDK synthesis, the Linux ARM64
 ingestion image, project-scoped deployment, Iceberg publication and Athena parity.
 [STATUS.md](STATUS.md) records which checks have actually run.
+
+## G3 local API
+
+```sh
+make bootstrap
+make dev
+```
+
+The server listens on `127.0.0.1:8000`. `/health` identifies the selected
+snapshot and `/docs` lists the REST schema. The command writes a 15-minute bearer
+token to `data/local-api.token` at mode 600. Use it for the authenticated
+`/v1/coverage`, `/v1/kpis`, `/v1/cves`, `/v1/map`, `/v1/graph`,
+`/v1/evidence/{evidence_id}`, and Streamable HTTP MCP at `/mcp/`.
+
+```sh
+(printf 'Authorization: Bearer ' && cat data/local-api.token) |
+  curl --noproxy '*' --header @- http://127.0.0.1:8000/v1/kpis
+make test
+make smoke-local
+```
+
+Both transports use the UUID selected from the root `.env` or the explicit
+`SNAPSHOT` override. Ranked CVEs, country observations, and relationship edges
+are constrained to the selected snapshot and typed filters. Date bounds apply
+to KEV addition dates. Geographic responses explicitly report unavailable
+coverage when the snapshot lacks observations for the cohort.
+
+The G3 smoke starts an isolated loopback server and calls all six tools using
+the official MCP client. The local JWT requires the loopback peer, audience,
+issuer, expiry, and workspace. The application also supports an explicit
+HTTPS JWKS verifier and Athena snapshot reader through its Python factory.
+G3 verification runs over DuckDB. Cloud deployment and investigation streaming
+are outside these local tests.
+[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x) ·
+[FastAPI query validation](https://fastapi.tiangolo.com/tutorial/query-param-models/)
