@@ -178,3 +178,18 @@ The deployed Cognito challenge check used a disposable native identity and
 verified both `NEW_PASSWORD_REQUIRED` and an enforced subsequent TOTP
 challenge. The account was disabled. The permanent administrator later
 completed onboarding and accessed the hosted dashboard. [Execution record](../STATUS.md)
+
+## V2 acceptance increments
+
+| Case | Verification | Outcome |
+| --- | --- | --- |
+| V2-E01 Official vulnerability source counts | Compare KEV declared count, digest-verified annual NVD arrays and verified CVE ZIP member counts with Parquet and DuckDB totals. | Local pass for the pinned artifacts. KEV 1,792/1,792, NVD 440,131/440,131 file records, CVE Program 431,604/431,604 file records. |
+| V2-E02 Resumability and synchronization | Validate byte-resume and receipt contracts. Reuse existing files on the live official-source rerun. Reconcile older NVD cursors using the annual feeds. | Local pass. Current NVD and CVE distinct counts reproduced. |
+| V2-E03 Source discrepancies | Keep each payload, reconcile published IDs and report unshared IDs and missing enrichment. | Local pass. 431,100 joined CVEs, with 14 NVD-only and 19 CVE Program-only. |
+| V2-E04 KEV history | Compare official Git revisions, retain invalid inputs and recheck committed segments. | 347 of 348 source revisions validated. One malformed upstream revision is reported. |
+| V2-E05 EPSS history and models | Inventory daily manifests, resume a bounded tranche and verify score changes at model boundaries. | Latest day and 43 of 2,041 available historical dates verified. Full history is blocked on local storage. |
+| V2-E06 Worldwide registration and geography | Measure registry coverage with qualified sources, validate country and regional codes, distinguish registration, inference, observation and missing coverage. | Source qualification started. |
+| V2-E07 Scale, privacy and cloud parity | Measure local and cloud query costs, compare a pinned Iceberg release, verify isolation, license constraints and browser performance. | Planned for V2.5 and V2.8. |
+| V2-E08 Agent grounding | Measure supported factual claims with a denominator and verify attribution of observations and inferences. | Planned for V2.7. |
+
+[V2 ingestion measurements and cost estimates](v2-ingestion.md)

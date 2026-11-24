@@ -87,3 +87,65 @@ The match feed needs a distinct storage and scan review. Neither artifact
 was ingested in the vulnerability corpus check.
 [CPE Dictionary META](https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.meta) ·
 [CPE Match META](https://nvd.nist.gov/feeds/json/cpematch/2.0/nvdcpematch-2.0.meta)
+
+## EPSS daily captures and historical backfill
+
+```sh
+uv run --locked --no-sync python -m pipelines.bulk_epss
+uv run --locked --no-sync python -m pipelines.bulk_epss --archive-plan
+uv run --locked --no-sync python -m pipelines.bulk_epss \
+  --start 2021-04-14 --end 2021-05-13 --max-downloads 7
+uv run --locked --no-sync python -m pipelines.bulk_epss \
+  --start 2026-06-14 --end 2026-06-16 --trend CVE-1999-0001
+```
+
+The historical runner reads FIRST's official archive index, verifies each
+listed blob, then writes a date-partitioned Parquet file and a checksum
+receipt. Repeat a bounded command to resume the same date range. An
+incomplete window exits nonzero and records the remaining listed dates.
+An absent upstream date has a separate status. Earlier files that supply
+probability alone have a null percentile. Daily probability change uses
+consecutive dates under the same model. The actual June 2026 cutover
+produced a null shift for the model transition and a measured zero on
+the next date for the tested CVE. [FIRST EPSS data](https://www.first.org/epss/data)
+
+The archive index from 2026-11-24 listed 2,041 dates from 2021-04-14
+through 2026-11-23. Nine of the 2,050 calendar dates were absent from that
+index. The verified local sample covered 43 of 2,041 available dates
+(2.11%) and 6,477,173 score records. The latest file contained 411,399
+valid scores. The first 30 calendar days had 25 available files and all
+25 were captured. The sample preserved 1,637,480 v1 records with missing
+source percentiles. All captured date reports had zero rejected or
+duplicated records.
+
+The index lists 2,812,440,549 bytes of raw archives. The verified sample
+used 36,921,229 raw bytes and 57,651,956 Parquet bytes. Applying each
+sample year's Parquet-to-raw ratio to that year's archive bytes projects
+4.39 GB of Parquet and **7.20 GB total**. The host had 2.93 GB free at
+measurement and the runner reserves 1 GiB. An EPSS-only destination needs
+about 8 GiB free for the remaining archive and its working reserve.
+The totals and dated gaps are recorded in
+`data/evidence/v2/epss-storage-estimate.json` and
+`data/v2/epss/archive-plan.json`.
+
+## Planning estimates for cloud expansion
+
+The measured vulnerability corpus and estimated full EPSS history total
+about 8.54 GB before Iceberg metadata, staging, retention and results.
+Use these examples to bound a future authorization. They assume S3
+Standard at USD 0.023 per GB-month and Athena at USD 5 per decimal TB
+scanned for calculation. Each query workload counts statements rather
+than browser interactions.
+
+| Scenario | Stored GB | Monthly Athena statements and average billed scan | S3 and Athena estimate per month |
+| --- | ---: | --- | ---: |
+| Validation | 10 | 1,000 × 10 MB | USD 0.28 |
+| Bounded pilot | 25 | 10,000 × 32 MB | USD 2.18 |
+| Growth | 100 | 100,000 × 32 MB | USD 18.30 |
+
+Estimates cover storage and Athena scans. Price Glue, requests, KMS,
+transfer, logs, Lambda, AgentCore and model inference for the approved
+workload before deploying. Cloud read parity, compaction and scan
+measurements are V2.5 acceptance cases.
+[S3 pricing](https://aws.amazon.com/s3/pricing/) ·
+[Athena pricing](https://aws.amazon.com/athena/pricing/)

@@ -981,3 +981,31 @@ The corrected bulk run took 52.02 seconds with a peak RSS of 522,403,840
 bytes. The original archive retrieval took 399.93 seconds before it
 encountered the ZIP wrapper. Incremental verification took 33.56 seconds.
 V2 AWS writes and model calls totalled zero.
+
+## 2026-11-24T11:53:56Z — EPSS archive index and bounded historical ingestion verified
+
+The latest official EPSS file for 2026-11-23 produced 411,399 valid
+records. The official archive tree had 2,041 available files from
+2021-04-14 through 2026-11-23, with nine calendar dates absent. Its
+compressed payload denominator was 2,812,440,549 bytes. The date-grain
+runner ingested 43 available days, 6,477,173 score rows, and zero rejected
+or duplicate rows. It preserved null percentiles for 1,637,480 older v1
+records. The deduplicated date pointers and source receipts support
+bounded resume. The first 30 calendar dates yielded 25 of 25 listed
+files. Subsequent samples spanned six calendar years and the live trend
+check preserved the June 2026 model transition.
+
+The first historical runs encountered a provider v1 file with two
+columns and an HTTP 403 on a date absent from the official archive.
+The corrected runner preserves optional percentile and uses the official
+archive manifest with an explicit absent-date result. The final seven
+sample ranges and the model-boundary trend returned exit 0. Evidence is
+under `data/evidence/v2/epss-*.log` and
+`data/evidence/v2/epss-methodology-trend.json`.
+
+Raw and normalized samples total 94,573,185 bytes. The measured
+year-specific size ratios project 7.20 GB for the full EPSS archive
+and Parquet. Available disk was 2.93 GB before the 1 GiB reserve.
+Complete EPSS normalization is blocked by local storage. The runbook
+records an approximately 8 GiB free destination for EPSS and bounded
+cloud cost scenarios. Continue V2.2 source qualification independently.
