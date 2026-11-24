@@ -103,9 +103,22 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   const world = page.locator('#exposure')
   const country = page.getByLabel('Map country')
   await expect(country).toHaveValue('')
-  await expect(world.getByLabel('Interactive globe with Natural Earth boundaries')).toBeVisible()
-  await page.locator('#exposure').scrollIntoViewIfNeeded()
-  await page.screenshot({ path: join(evidence, 'production-world-map.png') })
+  const globe = world.getByLabel('Interactive globe with Natural Earth boundaries').locator('canvas')
+  await expect(globe).toBeVisible()
+  await expect.poll(async () => {
+    const png = await globe.screenshot({ path: join(evidence, 'production-world-map.png') })
+    return page.evaluate(async (encoded) => {
+      const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0))
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+      const sample = new OffscreenCanvas(16, 16)
+      const context = sample.getContext('2d')!
+      context.drawImage(bitmap, 0, 0, sample.width, sample.height)
+      bitmap.close()
+      const pixels = context.getImageData(0, 0, sample.width, sample.height).data
+      const blue = pixels.filter((_, index) => index % 4 === 2)
+      return new Set(blue).size
+    }, png.toString('base64'))
+  }, { message: 'Wait for visible globe rendering' }).toBeGreaterThan(8)
   await country.selectOption('PE')
   await expect(world.getByText('Network context unavailable')).toBeVisible()
   await expect(world.getByText('Exposure coverage unavailable')).toBeVisible()
