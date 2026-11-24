@@ -91,3 +91,12 @@ creates no schedules. Apply subsequent plans only after reviewing live
 receipts, elapsed time, billed usage, and timeout or memory failures.
 Provisioning or enabling new AWS resources requires the applicable approval
 and a live change-set review.
+
+## Approved activation scope, 2026-11-24
+
+The user authorized the three ceilings above. The USD 2 canary is part of
+the USD 15 one-time ceiling. Initial tool allocations are USD 0.40 for
+the exact 572-object migration and USD 0.30 for the two-date EPSS plan.
+The USD 10 monthly pilot becomes applicable after successful canary and
+cost reconciliation. Later reviewed plans and usage receipts must fit
+the remaining one-time budget. [Execution record](../STATUS.md)

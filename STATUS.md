@@ -1099,3 +1099,35 @@ remain the base. Next cloud acceptance is the approved Bronze migration
 and one manually triggered AWS EPSS date. The configured account still
 requires reauthentication and separate V2 approval. The combined serving
 release, additional Gold marts and V2 browser acceptance remain open.
+
+## 2026-11-24T13:45Z — V2 AWS scope and release preparation verified
+
+The user approved USD 2 for the initial Bronze and manual canary within
+USD 15 one-time and a separate conditional USD 10 monthly pilot. The
+root ignored `.env` remains mode 600 and preserves the previous entries.
+Migration scope is bound to the reviewed 572-object, 1,926,772,199-byte
+inventory digest and EPSS scope to the reviewed November 20–21 plan.
+The USD 0.40 migration and USD 0.30 EPSS tool allocations are within
+the USD 2 envelope. No legacy authorization or receipt was reset.
+
+STS and live stack ownership matched account ending 6271, `default`,
+`us-east-1` and `aegis-dev`. Existing S3 versioning, SSE-KMS, bucket
+key, blocked public access and the enabled KMS key verified. The Bronze
+prefix was previously empty. The largest source payload, at 672,381,830
+bytes, has been deposited and independently HEAD-verified for SHA-256,
+version and expected SSE-KMS key. The migration receipt is pending while
+the remaining assets transfer.
+
+The existing ARM64 assembly was packaged once and pushed to the
+account-owned immutable CDK repository. Its 349,610,751-byte ECR image
+digest and exact prepared CloudFormation template are pinned in
+`data/evidence/v2-activation/change-set.json`. The live change set is
+`AVAILABLE` and contains only five additions in the canary stack.
+Execution requires the final Bronze receipt and published EPSS plan.
+An initial local JSII cache check and scope-tuple ordering check were
+corrected before asset publication. No V2 worker or schedule was invoked
+during preparation.
+
+The account-wide Cost Explorer baseline covers prior days. It does not
+attribute the new V2 costs to the prefix. See
+`data/evidence/v2-activation/{preflight,first-object,cost-baseline}.json`.
