@@ -101,13 +101,22 @@ def approved_model(environment: dict[str, str], store: Store) -> Select:
         raise ValueError(
             "a separate Bedrock approval scoped to this account and region is required"
         )
-    ceiling = read_amount(environment, "AEGIS_BEDROCK_BUDGET_USD")
+    ceiling, _ = bedrock_allocations(environment)
     in_rate = read_amount(environment, "AEGIS_BEDROCK_INPUT_USD_PER_MILLION")
     out_rate = read_amount(environment, "AEGIS_BEDROCK_OUTPUT_USD_PER_MILLION")
     session, _ = settings.identity()
     model_id = environment.get("BEDROCK_MODEL_ID", "")
     model_available(session, model_id)
     return make_selector(session, model_id, store, ceiling, in_rate, out_rate)
+
+
+def bedrock_allocations(environment: dict[str, str]) -> tuple[Decimal, Decimal]:
+    ceiling = read_amount(environment, "AEGIS_BEDROCK_TOTAL_BUDGET_USD")
+    local = read_amount(environment, "AEGIS_BEDROCK_BUDGET_USD")
+    runtime = read_amount(environment, "AEGIS_BEDROCK_RUNTIME_BUDGET_USD")
+    if local + runtime > ceiling:
+        raise ValueError("local and runtime Bedrock allocations exceed the shared ceiling")
+    return local, runtime
 
 
 def transient(error: Exception) -> tuple[bool, float]:

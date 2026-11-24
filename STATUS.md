@@ -477,3 +477,31 @@ $5 for each service and $15 remains the existing lakehouse ceiling.
 G5 preparation delivered the framework-neutral SSE and visualization
 state modules. Nuxt 3's documented maintenance period ended on 2026-07-31.
 The full dashboard, browser tests and G5 acceptance remain pending.
+
+## 2026-11-24T03:18:31Z — G4 PASS with live Bedrock
+
+Resumed from commit `78f0f9e`. STS confirmed account ending 6271, region
+`us-east-1`, the default profile and the `aegis-dev` scope. Persisted the
+$5 Bedrock and $5 AgentCore approvals, with independent local and runtime
+inference allocations of $0.05 each. The existing $15 lake authorization
+remains active. The root dotenv file is Git-ignored at mode 600.
+
+| Verification | Exit | Outcome |
+| --- | --- | --- |
+| `make smoke-investigation BEDROCK=1` (initial) | 0 | Six cited claims after a bounded revision. 1,014 input and 184 output tokens over two Nova Micro calls at 847 and 624 ms. First SSE event 8.30 ms, completion 2,428.31 ms. Estimated cost $0.000061250. |
+| `make smoke-investigation BEDROCK=1` (cancellation loop) | 0 | Four cited claims, 507 input and 73 output tokens, measured invocation path 1,012 ms. First SSE event 13.38 ms, completion 1,728.73 ms. Active cancellation reached one terminal event. Estimated cost $0.000027965. |
+| `AEGIS_BEDROCK_BUDGET_USD=.000001 uv run --locked --no-sync python -m backend.cli smoke-investigation --bedrock --expect-fallback` | 0 | The reservation was refused before inference. Eight grounded fallback claims, zero usage entries, first SSE event 13.88 ms and completion 877.20 ms. The on-disk allocation was preserved. |
+| `make lint`, `make typecheck`, `make test` | 0 each | 55 Python tests passed. SDK stubs verified throttling and timeout recovery. The live provider logs show no throttle response. |
+
+The live cases checked cited evidence, scoped routing, replay and terminal
+event ordering against the real pinned release. The Peru investigation
+reported unavailable exposure and omitted the risk summary and global
+ranking. Latencies for inference include the local reservation path.
+Evidence is under `data/evidence/g4-live/` in `converse-first.log`,
+`converse-final.log`, `budget-fallback.log` and `regression.log`.
+
+An unquoted reporting heredoc reran two authorized live smokes and one
+no-inference fallback smoke. Their three recorded outputs are preserved
+in `reporting-reruns.jsonl`. Across all four successful live investigations,
+Converse recorded 2,535 input and 403 output tokens, estimated at
+$0.000145145. The formatting command was corrected before commit.

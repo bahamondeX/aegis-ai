@@ -11,7 +11,9 @@ from fastapi import FastAPI
 from backend.auth import mint
 from backend.investigations.contracts import (
     AnalyticsEvent,
+    DoneEvent,
     EvidenceEvent,
+    Mode,
     ProposalEvent,
     ReportEvent,
 )
@@ -20,7 +22,7 @@ from backend.smoke import live_server
 
 
 async def run(
-    base: str, key: str, snapshot: UUID, *, require_bedrock: bool = False, runtime: bool = False
+    base: str, key: str, snapshot: UUID, *, mode: Mode = "deterministic", runtime: bool = False
 ) -> None:
     headers = {"Authorization": f"Bearer {mint(key)}", "Idempotency-Key": uuid4().hex}
     path = "/invocations" if runtime else "/v1/investigations"
@@ -64,9 +66,11 @@ async def run(
         assert all(
             set(claim.evidence_ids) <= known and claim.evidence_ids for claim in report.claims
         )
-        assert report.analysis_mode == ("bedrock" if require_bedrock else "deterministic")
-        if require_bedrock:
+        assert report.analysis_mode == mode
+        if mode == "bedrock":
             assert report.usage
+        elif mode == "fallback":
+            assert not report.usage
         replay = await client.post(path, json=request, headers={**headers, "Last-Event-ID": "1"})
         replay.raise_for_status()
         seen = [
@@ -125,6 +129,27 @@ async def run(
         assert country_report.scope == "country" and not country_report.claims
         assert country_analytics.geography == "unavailable" and country_analytics.risk is None
         assert not country_analytics.observations and not country_analytics.ranked_cve_ids
+        cancellation = {**headers, "Idempotency-Key": uuid4().hex}
+        cancelled = []
+        async with client.stream("POST", path, json=request, headers=cancellation) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                item = ADAPTER.validate_json(line[6:])
+                cancelled.append(item)
+                if item.seq == 1:
+                    if runtime:
+                        body = {"action": "cancel", "investigation_id": str(item.investigation_id)}
+                        result = await client.post(path, json=body, headers=headers)
+                    else:
+                        result = await client.post(
+                            f"{path}/{item.investigation_id}/cancel", headers=headers
+                        )
+                    assert result.json()["status"] == "cancelled"
+        terminal = cancelled[-1]
+        assert isinstance(terminal, DoneEvent) and terminal.payload.status == "cancelled"
+        assert sum(item.type == "done" for item in cancelled) == 1
         print(
             json.dumps(
                 {
@@ -138,6 +163,7 @@ async def run(
                     "completed_ms": round(elapsed_ms, 2),
                     "regional_claims": len(regional_report.claims),
                     "country_observations": len(country_analytics.observations),
+                    "cancellation": terminal.payload.status,
                     "usage": [entry.model_dump() for entry in report.usage],
                     "runtime": runtime,
                 }
@@ -147,7 +173,7 @@ async def run(
 
 
 def smoke(
-    app: FastAPI, key: str, snapshot: UUID, *, require_bedrock: bool = False, runtime: bool = False
+    app: FastAPI, key: str, snapshot: UUID, *, mode: Mode = "deterministic", runtime: bool = False
 ) -> None:
     with live_server(app) as base:
-        asyncio.run(run(base, key, snapshot, require_bedrock=require_bedrock, runtime=runtime))
+        asyncio.run(run(base, key, snapshot, mode=mode, runtime=runtime))

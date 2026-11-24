@@ -12,6 +12,7 @@ import uvicorn
 from backend.api import create_app
 from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth, mint
 from backend.investigations.bedrock import approved_model
+from backend.investigations.contracts import Mode
 from backend.investigations.service import InvestigationService
 from backend.investigations.store import SQLiteStore
 from backend.reader import SnapshotReader
@@ -24,7 +25,10 @@ def main() -> None:
     parser.add_argument("--snapshot", type=UUID)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--bedrock", action="store_true")
+    parser.add_argument("--expect-fallback", action="store_true")
     args = parser.parse_args()
+    if args.expect_fallback and (args.command != "smoke-investigation" or not args.bedrock):
+        parser.error("--expect-fallback is available for a Bedrock investigation smoke")
     env = project_environment()
     root = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
     snapshot = args.snapshot or configured_snapshot(env)
@@ -37,7 +41,10 @@ def main() -> None:
     if args.command == "smoke-investigation":
         from backend.investigations.smoke import smoke
 
-        smoke(app, key, reader.snapshot, require_bedrock=args.bedrock)
+        mode: Mode = (
+            "fallback" if args.expect_fallback else "bedrock" if args.bedrock else "deterministic"
+        )
+        smoke(app, key, reader.snapshot, mode=mode)
         return
     if args.command == "smoke":
         from backend.smoke import verify
