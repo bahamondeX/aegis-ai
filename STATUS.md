@@ -539,3 +539,50 @@ table to three rows while synchronizing the graph and KPIs.
 
 The dashboard ran locally in production mode. Frontend hosting and a
 standalone cloud API are outside the authorized deployment.
+
+## 2026-11-24T03:43:05Z — Authorized AgentCore portion of G6 PASS
+
+The scoped identity and runtime stacks both reached `CREATE_COMPLETE`.
+No existing AEGIS-specific OIDC provider was found. The dedicated
+Cognito pool uses administrator-only registration, a public OAuth
+authorization-code client, 10-minute access tokens and a workspace group.
+The backend checks issuer, expiry, app client, token type and group.
+The native Nuxt authorization request used S256 PKCE and kept the
+access and refresh tokens out of browser storage. All three temporary
+validation users were disabled after their checks.
+
+| Verification | Exit | Result |
+| --- | --- | --- |
+| `python -m infra.agent_deploy identity` | 0 | Reviewed change set created the scoped pool, browser client, domain and workspace group. |
+| `python -m infra.agent_deploy runtime` | 0 on retry | Published a Linux ARM64 image to the existing project ECR repository and deployed the AgentCore runtime, role and private checkpoint bucket. The initial change set treated the bootstrap version value as an SSM key. The retry used the template's scoped SSM reference. |
+| `cfn-lint` against both synthesized templates | 0 | Valid region-specific CloudFormation schemas. The AWS change sets also passed service validation. |
+| `node frontend/tests/remote-agent.mjs <restricted fixture path>` | 0 on final loop | Hosted Cognito returned real access tokens. Missing and ID tokens received 401. AgentCore wrapped the runtime's wrong-workspace 403 and peer-owner 404 as HTTP 424. The owner received SSE, replayed the exact 13-event suffix across sessions, and cancelled an active run. |
+| `python -m scripts.verify_agent_deployment` | 0 | Runtime and endpoint READY. Seven-day log retention, 60 s idle and 120 s lifetime. Inspected two live checkpoint objects using the existing project KMS key, private bucket configuration and 27 scoped IAM actions. |
+| `python -m scripts.agent_identity_fixture disable` | 0 | Disabled three temporary validation users and removed their private local fixture. |
+
+The remote SSE run recorded first event at **958.26 ms** and completion
+at **28,610.92 ms**. It returned six cited claims from eight evidence IDs,
+14 events including one terminal result, and two Nova Micro rounds at
+514 and 643 ms. The observed fixture and frontend validation used 12
+admitted HTTP attempts out of 20 allowed. The encrypted journal held two
+completed reports and one cancelled run. The completed remote reports
+recorded 1,521 input and 257 output tokens. Their estimated inference
+cost is $0.000089215. The runtime ledger reserved $0.0005376 of its $0.05
+allocation. Total observed local and remote inference was 4,056 input
+and 660 output tokens, estimated at $0.000234360. The independent runtime
+and supporting-service scenario remained below the authorized $5 allocation.
+No AWS invoice total was used for these estimates.
+
+Two OAuth verification attempts failed to reach a loopback callback.
+A bound loopback receiver corrected the callback check. The next loop
+identified AgentCore's HTTP 424 wrapper for application rejection, and
+the final assertions verified both the wrapper and its inner 403/404.
+
+Evidence is under `data/evidence/agentcore/` in `deploy-identity.log`,
+`deploy-runtime.log`, `deploy-runtime-retry.log`, `runtime-smoke-4.log`,
+`postdeploy-audit.log`, `usage-totals.log`, `cfn-lint.log`,
+`regression.log` and `disable-fixture.log`. The deployed runtime is
+`aegis_dev_investigations-…` in `us-east-1`, account ending 6271.
+The verified deployed image digest is `sha256:6056e1cd…df12248`.
+The existing G2 stacks and their guards were preserved. Standalone API
+and static site hosting are outside the AgentCore deployment scope.

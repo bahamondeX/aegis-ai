@@ -47,3 +47,53 @@ def test_athena_adapter_renders_only_pinned_tables_and_validated_values() -> Non
     reader = SnapshotReader.cloud(CapturingReader(), release, geo_available=False)
     filters = Filters(cve_ids=("CVE-2026-1234",), date_from=date(2026, 1, 1), limit=2)
     assert reader.view_rows(View.CVES, filters, Vulnerability) == []
+
+
+def test_cognito_access_tokens_require_client_expiry_and_workspace(monkeypatch) -> None:
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from backend.models import ServiceError
+
+    issuer = "https://cognito-idp.example.invalid/synthetic"
+    auth = Auth(
+        issuer=issuer,
+        audience="synthetic-browser",
+        workspace="project",
+        jwks_url=f"{issuer}/jwks.json",
+        cognito=True,
+    )
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    assert auth.jwks
+    monkeypatch.setattr(
+        auth.jwks, "get_signing_key_from_jwt", lambda _: SimpleNamespace(key=private.public_key())
+    )
+    now = datetime.now(UTC)
+    base = {
+        "sub": "test-operator",
+        "iss": issuer,
+        "exp": now + timedelta(minutes=5),
+        "client_id": "synthetic-browser",
+        "token_use": "access",
+        "cognito:groups": ["project"],
+    }
+
+    def authenticate(patch: dict) -> str:
+        token = jwt.encode({**base, **patch}, private, algorithm="RS256")
+        return auth.authenticate(f"Bearer {token}", "192.0.2.42")
+
+    assert authenticate({}) == "test-operator"
+    for patch, status in [
+        ({"token_use": "id"}, 401),
+        ({"client_id": "foreign-client"}, 401),
+        ({"iss": "https://other.example.invalid/"}, 401),
+        ({"exp": now - timedelta(seconds=10)}, 401),
+        ({"cognito:groups": ["foreign"]}, 403),
+        ({"cognito:groups": "project"}, 403),
+    ]:
+        with pytest.raises(ServiceError) as error:
+            authenticate(patch)
+        assert error.value.status == status

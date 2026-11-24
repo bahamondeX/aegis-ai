@@ -30,7 +30,7 @@ rule scoped_runtime {
     %runtime !empty
     %runtime.Properties {
         ProtocolConfiguration == "HTTP"
-        AuthorizerConfiguration.CustomJWTAuthorizer.AllowedAudience !empty
+        AuthorizerConfiguration.CustomJWTAuthorizer.AllowedClients !empty
         some RequestHeaderConfiguration.RequestHeaderAllowlist[*] == "Authorization"
         LifecycleConfiguration.IdleRuntimeSessionTimeout == 60
         LifecycleConfiguration.MaxLifetime == 120

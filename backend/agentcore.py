@@ -43,6 +43,7 @@ def runtime_app(environment: dict[str, str]) -> FastAPI:
         audience=environment["AEGIS_OIDC_AUDIENCE"],
         workspace=environment["AEGIS_OIDC_WORKSPACE"],
         jwks_url=environment["AEGIS_OIDC_JWKS"],
+        cognito=True,
     )
     session = boto3.Session(region_name=settings.region)
     if (

@@ -103,6 +103,38 @@ UI. The consumer validates the generated JSON Schema, SSE frame limits,
 event order, snapshot and investigation identity. The reducer checks the
 filter revision before applying proposed visualization updates. The
 verification includes a real HTTP stream from the pinned DuckDB capture.
-The frontend package is framework-neutral. The plan currently specifies
-Nuxt 3, whose published maintenance period ended July 31, 2026.
-[Nuxt release roadmap](https://nuxt.com/docs/4.x/community/roadmap/)
+The G5 dashboard uses these modules in Nuxt 4. See the
+[production-build and browser evidence](../STATUS.md).
+
+## Authorized runtime deployment and verification
+
+The approved `aegis-dev-identity` and `aegis-dev-agent` stacks use the
+configured AWS profile and regional account. The identity stack provides
+an invitation-only Cognito user pool, browser client and workspace group.
+The runtime JWT authorizer binds the Cognito client. Application
+validation checks the issuer, token expiration, token type, client ID,
+workspace group and authenticated subject. The browser uses Authorization
+Code with S256 PKCE on the registered loopback callback. Credentials stay
+in memory while the browser is connected.
+
+```sh
+make synth-agent
+make deploy-agent
+make audit-agent
+```
+
+`deploy-agent` reviews project-owned CloudFormation change sets, verifies
+the pinned Iceberg release and existing bootstrap, and publishes only the
+AgentCore image to the project ECR repository. It checks the two inference
+allocations against the shared $5 Bedrock ceiling. The $5 AgentCore ceiling
+and the existing $15 lakehouse limit are checked separately before writes.
+Deployed checkpoints use the existing project KMS key. Logs have seven-day
+retention. Each runtime session has a 60-second idle and 120-second
+lifetime ceiling. Validation uses a separate cap of 20 admitted attempts.
+
+The [execution record](../STATUS.md) captures the regional resource
+checks, real Cognito token validation, same-workspace user isolation,
+cross-session SSE replay, active cancellation, latency and measured model
+tokens. The development tests used temporary invited identities and
+disabled them after verification. Frontend and standalone API hosting
+remain separate from the approved runtime work.

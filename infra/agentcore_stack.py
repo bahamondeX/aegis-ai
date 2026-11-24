@@ -259,7 +259,7 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
         authorizer_configuration=agentcore.CfnRuntime.AuthorizerConfigurationProperty(
             custom_jwt_authorizer=agentcore.CfnRuntime.CustomJWTAuthorizerConfigurationProperty(
                 discovery_url=f"{issuer}/.well-known/openid-configuration",
-                allowed_audience=[audience],
+                allowed_clients=[audience],
             ),
         ),
         request_header_configuration=agentcore.CfnRuntime.RequestHeaderConfigurationProperty(
@@ -303,6 +303,8 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
         },
     )
     CfnOutput(stack, "RuntimeArn", value=runtime.attr_agent_runtime_arn)
+    CfnOutput(stack, "RuntimeId", value=runtime.attr_agent_runtime_id)
+    CfnOutput(stack, "CheckpointBucket", value=checkpoints.bucket_name)
     return stack
 
 

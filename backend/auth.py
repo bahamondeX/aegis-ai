@@ -21,8 +21,15 @@ class Auth:
         workspace: str,
         local_key: str | None = None,
         jwks_url: str | None = None,
+        cognito: bool = False,
     ) -> None:
-        if not issuer or not audience or not workspace or bool(local_key) == bool(jwks_url):
+        if (
+            not issuer
+            or not audience
+            or not workspace
+            or bool(local_key) == bool(jwks_url)
+            or (cognito and not jwks_url)
+        ):
             raise ValueError("configure exactly one JWT authentication mode")
         if local_key is not None and (
             len(local_key) < 32 or issuer != LOCAL_ISSUER or audience != LOCAL_AUDIENCE
@@ -36,6 +43,7 @@ class Auth:
         self.audience = audience
         self.workspace = workspace
         self.local_key = local_key
+        self.cognito = cognito
         self.jwks = jwt.PyJWKClient(jwks_url, timeout=3, lifespan=300) if jwks_url else None
 
     def authenticate(self, authorization: str | None, client_ip: str | None) -> str:
@@ -55,17 +63,29 @@ class Auth:
             else:
                 key = self.local_key
                 algorithm = "HS256"
+            expected = ["exp", "iss", "sub"]
+            expected += ["client_id", "token_use"] if self.cognito else ["aud", "workspace"]
             claims = jwt.decode(
                 token,
                 key,
                 algorithms=[algorithm],
                 issuer=self.issuer,
-                audience=self.audience,
-                options={"require": ["exp", "iss", "aud", "sub", "workspace"]},
+                audience=None if self.cognito else self.audience,
+                options={"require": expected, "verify_aud": not self.cognito},
             )
         except jwt.PyJWTError:
             raise ServiceError("unauthorized", "invalid or expired bearer token", 401) from None
-        if claims["workspace"] != self.workspace:
+        if self.cognito and (
+            claims["token_use"] != "access" or claims["client_id"] != self.audience
+        ):
+            raise ServiceError("unauthorized", "invalid access token or client binding", 401)
+        groups = claims.get("cognito:groups", [])
+        allowed = (
+            isinstance(groups, list) and self.workspace in groups
+            if self.cognito
+            else claims["workspace"] == self.workspace
+        )
+        if not allowed:
             raise ServiceError("forbidden", "token is outside this workspace", 403)
         subject = claims["sub"]
         if not isinstance(subject, str) or not subject:
