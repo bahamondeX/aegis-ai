@@ -67,6 +67,13 @@ const hasSession = auth.signedIn
 const isAdministrator = auth.administrator
 const account = auth.account
 const accountMessage = computed(() => {
+  if (account.value?.username === 'aegis-platform-admin' &&
+      ['PENDING_APPROVAL', 'APPROVED'].includes(account.value.status)) {
+    return [
+      'Administrator setup required',
+      'Complete email verification and authenticator setup in the administrator onboarding command. Then sign out and sign in again.',
+    ]
+  }
   switch (account.value?.status) {
     case 'PENDING_APPROVAL': return ['Approval pending', 'An administrator must authorize access to your account. Check back here for a decision.']
     case 'REJECTED': return ['Registration declined', 'An administrator declined this registration. Contact your workspace administrator if you need help.']

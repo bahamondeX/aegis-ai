@@ -11,15 +11,75 @@ from uuid import UUID
 from botocore.exceptions import ClientError
 
 from backend.identity import ADMIN_EMAIL, ADMIN_USERNAME, Audit, Decision, Status, attributes
-from backend.investigations.store import S3Store
-from infra.agent_deploy import existing_stack, outputs
+from backend.investigations.store import S3Store, Store, Version
 from infra.hosting_preflight import hosting_budget
 from infra.settings import SDK_CONFIG, Settings
 from pipelines.config import project_environment
 from pipelines.io import DataError
 
 
+def pending_decision(stored: Version | None) -> Decision:
+    current = Decision.model_validate_json(stored.data) if stored else Decision()
+    if current.status != Status.PENDING or current.audit or current.revoked_before:
+        raise DataError("administrator account has an unexpected existing decision")
+    return current
+
+
+def activate_verified_admin(store: Store, subject: UUID, now: datetime) -> None:
+    for _ in range(3):
+        stored = store.get(str(subject))
+        current = pending_decision(stored)
+        current.status = Status.APPROVED
+        current.revoked_before = int(now.timestamp())
+        current.audit.append(
+            Audit(actor=subject, target=subject, action="activate_admin", timestamp=now)
+        )
+        if store.put(
+            str(subject), current.model_dump_json().encode(), stored.token if stored else None
+        ):
+            return
+    raise DataError("the administrator decision changed during onboarding")
+
+
+def verified_native_mfa(user: dict) -> bool:
+    attrs = attributes(user)
+    return (
+        user["Username"] == ADMIN_USERNAME
+        and user["Enabled"]
+        and user["UserStatus"] == "CONFIRMED"
+        and attrs.get("email") == ADMIN_EMAIL
+        and attrs.get("email_verified") == "true"
+        and not attrs.get("identities")
+        and user.get("PreferredMfaSetting") == "SOFTWARE_TOKEN_MFA"
+        and "SOFTWARE_TOKEN_MFA" in user.get("UserMFASettingList", [])
+    )
+
+
+def verify_admin_email(client, access: str) -> None:
+    client.get_user_attribute_verification_code(AccessToken=access, AttributeName="email")
+    print(f"Cognito sent a verification code to {ADMIN_EMAIL}. Open the newest message.")
+    for attempt in range(3):
+        try:
+            client.verify_user_attribute(
+                AccessToken=access,
+                AttributeName="email",
+                Code=getpass("Latest Cognito email verification code: ").strip(),
+            )
+            return
+        except client.exceptions.CodeMismatchException:
+            if attempt == 2:
+                raise
+            print("Code mismatch. Check the newest Cognito email and enter its six-digit code.")
+        except client.exceptions.ExpiredCodeException:
+            if attempt == 2:
+                raise
+            client.get_user_attribute_verification_code(AccessToken=access, AttributeName="email")
+            print("The code expired. Cognito sent a new verification email.")
+
+
 def main() -> None:
+    from infra.agent_deploy import existing_stack, outputs
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("invite", "onboard"))
     args = parser.parse_args()
@@ -79,9 +139,13 @@ def main() -> None:
         subject = UUID(attrs["sub"])
         if stored := store.get(str(subject)):
             if Decision.model_validate_json(stored.data).status == Status.APPROVED:
+                if not verified_native_mfa(user):
+                    raise DataError(
+                        "administrator approval exists but Cognito verification or MFA is missing"
+                    )
                 print("Administrator onboarding is already complete.")
                 return
-            raise DataError("administrator account has an unexpected existing decision")
+            pending_decision(stored)
         change_required = user["UserStatus"] == "FORCE_CHANGE_PASSWORD"
         password = getpass(
             "Cognito temporary password: " if change_required else "Current password: "
@@ -119,12 +183,7 @@ def main() -> None:
         access = result["AuthenticationResult"]["AccessToken"]
         current = attributes(client.admin_get_user(**identity))
         if current.get("email_verified") != "true":
-            client.get_user_attribute_verification_code(AccessToken=access, AttributeName="email")
-            client.verify_user_attribute(
-                AccessToken=access,
-                AttributeName="email",
-                Code=getpass("Cognito email verification code: "),
-            )
+            verify_admin_email(client, access)
         if "SOFTWARE_TOKEN_MFA" not in client.admin_get_user(**identity).get(
             "UserMFASettingList", []
         ):
@@ -145,22 +204,11 @@ def main() -> None:
             AccessToken=access,
             SoftwareTokenMfaSettings={"Enabled": True, "PreferredMfa": True},
         )
-        client.admin_user_global_sign_out(**identity)
         user = client.admin_get_user(**identity)
-        if (
-            attributes(user).get("email_verified") != "true"
-            or user.get("PreferredMfaSetting") != "SOFTWARE_TOKEN_MFA"
-            or user["UserStatus"] != "CONFIRMED"
-        ):
+        if not verified_native_mfa(user) or attributes(user)["sub"] != str(subject):
             raise DataError("Cognito did not confirm administrator verification and MFA")
-        now = datetime.now(UTC)
-        active = Decision(
-            status=Status.APPROVED,
-            revoked_before=int(now.timestamp()),
-            audit=[Audit(actor=subject, target=subject, action="activate_admin", timestamp=now)],
-        )
-        if not store.put(str(subject), active.model_dump_json().encode(), None):
-            raise DataError("the administrator decision changed during onboarding")
+        client.admin_user_global_sign_out(**identity)
+        activate_verified_admin(store, subject, datetime.now(UTC))
         print("Administrator enabled. Sign in again with your password and authenticator.")
     except ClientError as error:
         raise SystemExit(

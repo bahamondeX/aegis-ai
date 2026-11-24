@@ -804,3 +804,47 @@ the authenticated cancellation run used the real cloud service. The
 original browser journey wrapper exited nonzero on its peer assertion.
 The direct peer cancellation and logout checks passed independently.
 G6 and G7 remain open on the owner-side identity cases listed above.
+
+## 2026-11-24T07:51:00Z — Permanent administrator onboarding recovery
+
+Read-only STS and owned-stack checks confirmed account ending 6271 and the
+original Cognito pool. An exact email lookup and a full pool enumeration
+found one matching identity, the enabled native `aegis-platform-admin`.
+The account was `CONFIRMED` and in `aegis-dev-admins`, with email
+verification and preferred TOTP still missing. The application decision
+for the same subject was `PENDING_APPROVAL`. It contained one revoked
+browser session, zero decision audit entries, and a zero approval cutoff.
+There was no separate Google profile to link.
+
+A sign-out during onboarding wrote the default pending decision to preserve
+session revocation. The previous onboarding command rejected every
+preexisting decision except `APPROVED`, so it aborted before proving email
+ownership or enrolling TOTP. The owner reproduced this behavior with
+`DataError: administrator account has an unexpected existing decision`.
+After the correction, onboarding accepted the current password and
+reached Cognito email verification. The owner's first verification attempt
+returned `CodeMismatchException`.
+
+The corrected operator command resumes a pending record that has no
+decision history or revocation cutoff. It preserves closed sessions and
+uses a conditional write after verifying the same native subject, mailbox
+ownership, enabled preferred TOTP and completed Cognito confirmation. It
+continues to guard against replacing a substantive decision. Cognito
+verification permits up to three attempts. A mismatch retains the same
+challenge and an expired code triggers a fresh email. The hosted UI now
+shows **Administrator setup required** for the incomplete reserved account.
+Regular approval and JWT authorization checks use the existing API/runtime
+code. The pool, password, group and provider links were not changed by this
+repair.
+
+`make lint typecheck test` passed with 71 tests.
+`make lint-ui typecheck-ui` and `make deploy-ui` passed. A read of the
+actual CloudFront bundle returned HTTP 200 and contained the new setup
+guidance. Logs are in `data/evidence/admin-recovery/`. Permanent hosted
+administrator authorization is pending the owner's private verification and
+fresh Cognito sign-in.
+
+The public Chromium smoke passed one hosted HTTPS and unauthorized-access
+case in 10.9 seconds. Cognito confirmed the owner's email verification at
+2026-11-24T07:49:45Z. TOTP enrollment and application activation remained
+pending at the next read.

@@ -56,6 +56,13 @@ verify owner identity through the AWS operator recovery process before
 changing any MFA preference. Keep an expired temporary invitation recovery
 separate from routine deployments.
 
+If the password was changed in the hosted login, rerun the onboarding
+command with the current password. A sign-out during setup can create a
+pending decision containing closed browser sessions. Onboarding resumes
+from that record and preserves its session revocations. Use the most
+recent Cognito message sent to the administrator mailbox. A mismatched
+code can be retried in the same command.
+
 ## Email and provider operations
 
 Cognito's default sender handles identity verification and native password
