@@ -59,6 +59,7 @@ enroll an authenticator before privilege is enabled. [Identity runbook](identity
 | Live model duration | 795 ms first and 466 ms repeat, with 1,059.22 and 730.10 ms total on the local HTTP boundary. |
 | CVE detail query parity | Eight Athena queries, 5,488,587 bytes scanned, equal to the pinned DuckDB detail result. |
 | Hosted mitigation | 4 supported of 4 claims, 222 input and 59 output tokens. First visible progress at 2,996.45 ms and report at 16,216.16 ms. |
+| Hosted Chromium rerun | Three production browser cases passed in 2.3 minutes. The new live response grounded 4 of 4 claims and used 222 input and 59 output tokens. Visible progress arrived at 15,388.32 ms and the report at 27,393.39 ms. |
 | Earlier remote AgentCore baseline | 958.26 ms to first event, 28,610.92 ms to completion. This baseline predates the hosted identity extension. |
 
 The evaluation report records acceptance by environment, tests and cases still
@@ -67,6 +68,7 @@ the execution record distinguishes recorded usage from billing data.
 [Evaluation](evaluation.md) · [Execution record](../STATUS.md)
 
 
-Actual production captures are in the ignored evidence directory
-`data/evidence/final/`. The sign-in, pending approval, CVE card and mitigation
-captures were collected from the assigned CloudFront URL.
+Actual production captures are in the ignored evidence directories
+`data/evidence/final/` and `data/evidence/production-acceptance/`.
+Sign-in, pending approval, world map, relationships, CVE detail and
+mitigation captures were collected from the assigned CloudFront URL.

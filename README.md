@@ -244,6 +244,11 @@ Google identities require administrative approval. Verified accounts can
 check their status while waiting. Administrators manage access and audit
 history from `/admin`.
 
+The owner verified access for the permanent native account
+`aegis-platform-admin` at `admin@oscarbahamonde.com`. Use **Sign in** with
+the native username, complete the authenticator challenge and open **User
+administration**.
+
 The [execution record](STATUS.md) lists the deployed resources and completed
 acceptance checks. The [hosting runbook](docs/hosting.md) covers the scoped
 rollout and teardown. The [identity runbook](docs/identity-management.md) covers

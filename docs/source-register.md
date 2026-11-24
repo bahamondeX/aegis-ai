@@ -49,3 +49,9 @@ Cloud publication uses the reviewed SHA-256
 No further geographic providers or datasets are in scope. Canada is the
 qualified network-context geography. CVE geographic exposure is unavailable.
 Private confirmed tenant sites and SOC incident views remain disabled.
+
+The 24 November production rerun independently exercised Canada and Peru
+through the hosted interface and API on this release. Canada returned the
+qualified network context. Peru showed unavailable network context.
+Both scopes reported unavailable CVE geographic exposure and emitted no
+exposure observations. [Production evaluation](evaluation.md)

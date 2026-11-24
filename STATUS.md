@@ -885,3 +885,69 @@ disposable-account smoke verified a locally matched enrollment and a
 subsequent real TOTP challenge, then disabled the test account. The final
 lint, typecheck and all 73 tests passed. The permanent profile was not
 modified by the validation.
+
+## 2026-11-24T10:58:34Z — Permanent administrator and combined production smoke verified
+
+The owner signed in as the permanent native `aegis-platform-admin` account
+(`admin@oscarbahamonde.com`) and opened the hosted workspace and
+`/admin`. The owner observed 17 directory entries, ten pending approvals,
+seven approved decisions and zero suspended decisions. An independent
+inspection of the authenticated Chrome session confirmed those values and
+opened the protected audit. A read of the live Cognito and decision records
+confirmed an enabled native subject, verified email, current administrator
+group, enabled preferred software TOTP, and an APPROVED decision. The
+activation audit records that same actor and target, `activate_admin`,
+`2026-11-24T08:22:43.538609Z`, and outcome `applied`. The permanent row
+exposed the audit action only. The live verification made no change to the
+permanent account, its password, group or MFA. Its positive authorization
+and onboarding are verified. The ordinary-user lifecycle still requires
+authenticated administrative decisions.
+
+| Command or observation | Exit | Evidence under `data/evidence/production-acceptance/` |
+| --- | --- | --- |
+| Owned-stack and live directory read | 0 | `control-plane.json`. Before new tests, Cognito had 16 disabled directory entries alongside the permanent administrator. The old dashboard included disabled identities in its application decision counts. Live directory status was verified, and the complete historical creation-to-disable join is pending. |
+| First combined smoke via `scripts.smoke_cloud` | 1 | `full-smoke.log`. Pending denial and cancellation/logout passed. The journey waited on an evidence request even though the CVE detail already supplied that record to the browser cache. The wrapper timed out and its cleanup STS call reported `ExpiredToken`. |
+| Corrected combined Chromium smoke, using the same scoped fixture and CloudFront URL | 0 | `full-smoke-r2.log`, three passed in 2.3 minutes. The CVE evidence ID rendered in the browser, the authenticated evidence endpoint returned the pinned snapshot, and the endpoint refused anonymous access. The run covered ordinary administrative denial, world/Canada/Peru, relationships, live mitigation, owner replay, peer denial, editable handoff, cancellation and logout. |
+| `python -m scripts.evaluate_release --hosted-evidence <production-mitigation.json>` | 0 | `grounding-hosted.json`, four of four factual claims supported. The report completed in 27.39 s with visible progress at 15.39 s and headers at 14.57 s. Nova Micro took 534 ms and used 222 input and 59 output tokens, estimated USD 0.00001603. Nine ordered mitigation events and one terminal event. The browser run did not isolate cold and warm timings. |
+| Combined cancellation and logout evidence | 0 | `production-session-checks.json`. Explicit cancel returned 200 and emitted one cancelled terminal event. Peer cancellation was denied and logout revoked access with the previous token. |
+| Genuine expired-token API check | HTTP 401 | `expired-token-check.json`. The API denied the original fixture token after its signed expiration. |
+| Live static bundle scan | 0 | `bundle-inspection.json`. Three HTML documents, 36 assets and 6,044,554 bytes. Zero access-key, private-key, source-map or loopback API markers. Tested sessions stored no access or refresh token persistently. |
+| `make lint typecheck test`, `make lint-ui typecheck-ui`, `sh scripts/frontend.sh test` and `make build-ui-static` | 0 | `python-regression.log`, `ui-checks-final.log`, `frontend-contracts.log`, `static-build.log`. 73 Python tests and four frontend contracts passed. The locally built dashboard distinguishes Cognito-disabled entries from active decisions and retains their audit. Publication of that change is pending. |
+| Native public signup in Chromium | HTTP 200 | Cognito accepted a dedicated validation registration and displayed email verification. The private creation receipt records the exact alias and request identifier. Confirmation and password recovery need private mailbox interaction. |
+
+The live CloudFront application used the existing API Gateway, AgentCore and
+pinned Iceberg release `4e13ca6b-c2e1-4407-88bc-c362da7dbacb`. Canada
+continues to report historical CRTC LTE population coverage. Peru had no
+network context, and neither scope emitted CVE geography. Private confirmed
+sites and SOC incidents remain disabled. The archived parity observation
+of eight Athena queries and 5,488,587 bytes remains the current measured
+detail-query baseline. The browser rerun did not measure new scanned bytes.
+Production captures include sign-in, the redacted pending state, the world
+map beside the relationships, CVE detail and the live report. A separate
+hosted check verified the rendered globe canvas. It made no model call.
+
+The approved ceilings remain USD 15 lakehouse, USD 5 Bedrock, USD 5
+AgentCore, and USD 5 hosting/identity. Before the new run, the local and
+runtime inference ledgers reserved USD 0.0012544 and USD 0.0007168 of their
+separate USD 0.05 allocations. The reconciled remaining pilot estimates
+were USD 4.97 lakehouse, USD 4.78 Bedrock, USD 4.24 AgentCore and USD 4.00
+hosting before this run. Cost Explorer reported service-level account
+estimates, including USD 0.12495946 Bedrock, USD 0.155146868 AgentCore and
+USD 0.000643 API Gateway for the observed month. Project allocation was
+unavailable, so those amounts are not attributed project charges.
+
+**G6 and G7 remain BLOCKED on the mandatory identity acceptance and
+cleanup.** Hosted admin approval, rejection, suspension and restoration,
+native confirmation and recovery, and completed Google authentication
+remain open. The scoped AWS operator session expired during the first
+smoke. A read-only retry returned `LoginRefreshRequired`
+(`operator-session-recheck.log`). The three temporary smoke identities'
+exact subjects and creation
+receipts are retained in the private manifest for confirmed disablement.
+The separate public-signup validation identity also needs cleanup after
+mailbox work. Await private owner participation for the browser challenges
+and AWS session renewal. G1–G5 remain closed.
+
+Verified source increments were `a642ab2` for the combined browser harness
+and fixture receipts, `8bdfd1e` for the locally built administrator view,
+and `5358871` for globe-rendering readiness.

@@ -9,6 +9,7 @@ lake. The deployment scope and measured outcomes are recorded in [STATUS.md](../
 flowchart LR
   Browser["Nuxt 4 browser, OAuth Code + PKCE"] -->|TLS| CF["CloudFront"]
   Browser -->|Code + S256 PKCE| OIDC["Existing Cognito, native email and Google"]
+  Browser -->|Native signup, verification and recovery| OIDC
   OIDC -->|Reserve admin identity| Guard["Pre-sign-up Lambda"]
   Browser -->|Same-origin account and admin UI| CF
   CF -->|OAC, static asset paths| UI["Private encrypted S3 UI"]
@@ -16,9 +17,9 @@ flowchart LR
   Gateway -->|Lambda response-streaming integration| API["ARM64 Lambda, FastAPI + Web Adapter"]
   API -->|Pinned release, encrypted workgroup| Lake["Existing Athena, Glue and S3"]
   API -->|Access token + scoped session, SSE| Runtime["Existing AgentCore runtime"]
-  API -->|Current group and subject| OIDC
-  Runtime -->|Current group and subject| OIDC
-  API -->|Conditional account state and audit| Journal["Existing private KMS-encrypted S3"]
+  API -->|Current Cognito status, group and subject| OIDC
+  Runtime -->|Current Cognito status and subject| OIDC
+  API -->|Conditional decisions, revocation and audit| Journal["Existing private KMS-encrypted S3"]
   Runtime -->|Read access state, write owner-bound checkpoints| Journal
   Runtime -->|Plan, research, analyze, validate| Graph["LangGraph"]
   Graph -->|Typed MCP tools| Lake
@@ -105,6 +106,23 @@ It omits the managed Lambda/API Gateway/CloudFront transport.
    and UI objects. Irreversible data or identity deletion needs separate
    authorization. Retained resource charges should be reconciled after
    teardown. [Lakehouse runbook](lakehouse.md)
+
+## Production validation evidence
+
+Run the combined Chromium smoke once per bounded validation attempt.
+Provide `--evidence-dir` to `scripts.smoke_cloud` to retain captures from
+previous runs. The wrapper verifies the owned deployment and cleans up
+its fixture cohort. If the AWS operator session expires during a run,
+renew it using the same scoped profile before invoking
+`python -m scripts.agent_identity_fixture disable --hosted`. Verify the
+saved Cognito creation and disable receipts for the exact subjects.
+Keep the mode-600 fixture manifest until the disable operation confirms
+the directory state. A browser test exit alone cannot establish cleanup.
+
+The 24 November 2026 combined run passed all three Chromium tests and
+captured the hosted map, graph, CVE detail and live mitigation report.
+The current gates and the separate mailbox, Google and administrative
+checks are tracked in the [evaluation report](evaluation.md).
 
 ## Cost envelope for a bounded pilot
 

@@ -20,3 +20,9 @@
    only with a controlled validation mailbox. Disable temporary users after the demo.
 7. Close with the measured grounding denominator, latency, tokens, Lakehouse
    parity and remaining acceptance items from the evaluation report.
+
+For the public portion of the demo, use the captured production journey
+under `data/evidence/production-acceptance/`. Treat live approval, password
+recovery and Google lifecycle steps as validation scenarios until their
+production results are recorded. Keep the permanent administrator's
+sign-in and authenticator out of recordings. [Evaluation](evaluation.md)

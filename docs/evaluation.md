@@ -82,10 +82,14 @@ Artifacts are `data/evidence/continuation/grounding-acceptance.json`,
 | --- | --- | --- |
 | E11 CVE detail | PASS. Same-release DuckDB/Athena detail parity for Peru scope, including CISA guidance. Eight queries scanned 5,488,587 bytes. | Query log in `data/evidence/final/athena-detail.log`. |
 | E17 Nova Micro mitigation | PASS on the local HTTP boundary with real Nova Micro Converse inference. Two same-CVE Canada-scoped cases grounded 7 of 7 claims against pinned records. | Hosted CVE card to mitigation also emitted a live Nova Micro report. See below. |
-| E18 Registration | Local policy tests confirm verified email remains pending and browser tokens are client-bound. | Native Chromium registration and email delivery verified. Email confirmation and a completed Google login require a mailbox or Google account owner. |
-| E19 Administrative authorization | Local RSA-signed fixture checks verify pending denial, current Cognito group and MFA, all four decisions and atomic audit. | The private invite and explicit group assignment are deployed. Owner MFA enrollment and hosted admin decisions are pending. |
-| E20 Revocation and recovery | Local fixture checks reject a pre-suspension token after suspension and restoration, and reject the logged-out session. | Real browser logout passed and revoked the previous access token. The recovery page rendered, while the email-code challenge remains pending. |
-| E21 Direct service and owner isolation | Prior G6 baseline covered real AgentCore workspace/owner separation. The new local gateway checks deny unapproved accounts and mismatched subjects. | Hosted pending user blocked at CloudFront API and direct AgentCore. Peer replay on the approved path returned an invalid cursor in the peer namespace. |
+| E18 Permanent administrator authorization | The owner authenticated as the reserved native administrator. Independent hosted inspection showed the protected directory and activation audit. Cognito and the application confirmed the enabled subject, verified email, live administrator membership, preferred TOTP and APPROVED decision. | The ordinary decision workflow still needs an authorized hosted action. The permanent account exposes only its audit action. Local API regression verifies a suspension request for it is refused. |
+| E19 Native registration and email confirmation | Chromium submitted a dedicated email registration and reached Cognito's verification challenge. Native sign-in and a pending account's access restrictions were exercised with an operator-created fixture. | Complete mailbox confirmation and sign-in for the actual public signup. |
+| E20 Google federation and pending approval | The hosted Google entry point and Cognito redirect are configured. The local signed-token regression verifies a matching email and a group claim confer no administrator access. | Complete a real Google login with a controlled validation identity, then verify its pending status, ordinary workspace approval and revocation. |
+| E21 Administrative approval and rejection | The local signed-token API test verifies both transitions and rejects an ordinary user's approval request. | Approve and reject distinct disposable accounts through the hosted administrator interface. |
+| E22 Suspension, restoration and token revocation | The local API confirms that a suspended token stays revoked after restoration. Hosted cancellation and browser logout completed and the API refused the logged-out token. | Exercise hosted suspension and restored access with a fresh token and confirm the pre-suspension token stays denied. |
+| E23 Password recovery and logout | A real hosted browser logout revoked the old access token. The Cognito recovery form was previously observed. | Complete the actual mailbox recovery challenge and verify sign-in with the changed disposable password. |
+| E24 Administrative privilege escalation prevention | Hosted assertions deny a pending user's admin reads and an approved ordinary user's request with an administrator header and role field. The signed-token regression rejects substituted subjects, wrong clients, wrong token types and untrusted group claims. | The hosted administrator's privileged mutation checks remain open. |
+| E25 Administrative audit integrity | The hosted protected audit and stored decision both recorded the permanent account's activation with actor, target, UTC time and applied outcome. The local regression verifies the audit created by each lifecycle transition. | Verify audit entries for the disposable approvals, rejection, suspension and restoration in production. |
 
 Live Nova Micro cases saw first browser-independent HTTP events at 7.95 and
 8.61 ms, full local streams at 1,059.22 and 730.10 ms, and Converse calls at
@@ -133,15 +137,44 @@ event, a peer could not cancel the owner's journal, and a browser logout
 invalidated the old API token. Its evidence is
 `data/evidence/final/production-session-checks.json`.
 
-Final G7 remains blocked on permanent-administrator activation and
-administrative lifecycle verification in the browser, native mailbox
+### Production acceptance rerun, 24 November 2026
+
+All three combined Chromium cases passed in 2.3 minutes against the assigned
+CloudFront URL. The corrected journey verified the CISA record rendered
+from the CVE detail and independently read the same evidence ID from the
+authenticated API. The identical route refused an anonymous request. This
+tested the UI's evidence cache and the server's authorization separately.
+The combined run also exercised world, Peru and Canada filters, the
+relationship graph, live mitigation, exact owner replay, denied peer
+replay and cancellation, an editable handoff with no outgoing POST,
+explicit cancellation, and browser logout with old-token refusal.
+
+| Measurement | New observation |
+| --- | --- |
+| Local regressions | 73 Python tests and four frontend contract tests passed. Lint and type checks passed. |
+| Hosted grounding | 4 of 4 factual claims supported by independent archive records, 100%. |
+| Hosted timing | Response headers at 14.57 s, first visible progress at 15.39 s, report at 27.39 s. This browser run did not isolate Lambda cold and warm timings. |
+| Live model | One Nova Micro call, 534 ms, 222 input and 59 output tokens, estimated USD 0.00001603. |
+| SSE | Nine ordered mitigation events and one completed terminal event. The independent cancellation stream emitted one cancelled terminal event. |
+| Disclosure and external actions | No unauthorized disclosure or outgoing handoff submission in the tested cases. |
+| Geography | Zero CVE geographic observations emitted. Historical Canadian network context was independent of the unavailable CVE exposure, and Peru network context was unavailable. |
+| Bundle and storage | Three production documents and 36 referenced assets, 6,044,554 bytes in total, produced no access-key, private-key, source-map or loopback API marker. No persisted access or refresh token was found in the tested browser sessions. |
+| Token expiry | The live account endpoint refused the original signed fixture token with HTTP 401 after its expiration. |
+
+The accepted release was `4e13ca6b-c2e1-4407-88bc-c362da7dbacb`.
+The historical local deterministic 22/22, local live 7/7, historical
+hosted live 4/4 and new hosted live 4/4 denominators remain separate. The
+previous Athena detail parity remains eight queries and 5,488,587 scanned
+bytes. The browser test did not collect a new authoritative Athena scan
+total. Evidence and production images reside in
+`data/evidence/production-acceptance/`.
+
+Final G7 remains open on the hosted administrative lifecycle, native mailbox
 confirmation and password reset, and a complete Google federation flow.
-The owner can complete these checks without changing infrastructure or
-sharing authentication secrets. Notifications and geographic source-dependent
-positive cases remain outside mandatory activation.
+Notifications and geography cases that require additional qualified source
+data remain outside mandatory acceptance.
 
 The deployed Cognito challenge check used a disposable native identity and
 verified both `NEW_PASSWORD_REQUIRED` and an enforced subsequent TOTP
-challenge. The account was disabled. This evidence exercises the same pool
-and client used by the permanent administrator, whose private onboarding
-remains pending. [Execution record](../STATUS.md)
+challenge. The account was disabled. The permanent administrator later
+completed onboarding and accessed the hosted dashboard. [Execution record](../STATUS.md)

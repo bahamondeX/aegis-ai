@@ -22,6 +22,12 @@ has no linking flow.
 | Suspended | Restore |
 | Rejected | Retained for audit |
 
+A Cognito-disabled identity cannot authenticate. Preserve its application
+decision and audit history when retiring a test identity. Verify the pool
+and immutable subject against its creation record before disabling it and
+verify the result with a fresh directory read. The hosted fixture runner
+records the creation and disable request identifiers in private evidence.
+
 The API and AgentCore independently validate Cognito signature, issuer,
 token use, expiry, client, OAuth scope and subject against the live directory.
 The reserved administrator also requires the current Cognito group, verified
@@ -59,6 +65,11 @@ administration** inside the signed-in workspace. For a lost authenticator,
 verify owner identity through the AWS operator recovery process before
 changing any MFA preference. Keep an expired temporary invitation recovery
 separate from routine deployments.
+
+The permanent native administrator completed activation on 24 November
+2026. The owner authenticated in production and opened **User administration**.
+The current native profile, verified email, Cognito group, preferred TOTP
+factor, application approval and activation audit were checked independently.
 
 If the password was changed in the hosted login, rerun the onboarding
 command with the current password. A sign-out during setup can create a

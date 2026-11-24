@@ -107,7 +107,9 @@ audit. The browser receives no AWS administrative credentials. Notification
 delivery is conditional on approved provider configuration and cost. Record
 real browser/API outcomes for each identity method, lifecycle decision,
 revocation, recovery, administrative guard and isolation, and disable temporary
-validation identities after testing.
+validation identities after testing. Match the pool and immutable subject to
+the test creation record before disablement, verify the resulting directory
+state and retain the administrative audit.
 
 ## Frontend
 Nuxt 4 strict TypeScript, Nuxt UI/Tailwind compatible versions. Dark operational design, original branding, responsive panels, keyboard navigation, readable contrast, reduced motion. globe.gl for globe, MapLibre + deck.gl for tactical view (lazy-load separately to avoid duplicate WebGL contexts), Cytoscape.js bounded subgraphs, ECharts for trends and KPIs. Client-only rendering for WebGL, cleanup on unmount, resize and fallback for no GPU. Use legitimate attributed basemap and geography datasets; no fabricated arcs or blinking attacks. Display source timestamps, units, confidence, empty/error/loading states, evidence drawer, filter chips, agent activity timeline. Cap nodes and map features, aggregate by country. On M2 8 GB avoid concurrent heavy builds; browser performance measured, not invented. Use Playwright Chromium smoke and screenshots of actual running app; no screenshot substitution for tests.
