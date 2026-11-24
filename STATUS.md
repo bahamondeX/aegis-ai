@@ -1253,3 +1253,39 @@ The query scanned 89,257 bytes in 1,250 ms. Rerunning attachment changed
 zero partitions. An earlier local prototype incorrectly URL-encoded the
 file path. The corrected prototype and the live AWS probe both pass.
 The full archive promotion is queued behind verified campaign completion.
+
+## 2026-11-24T14:38Z — Qualified global network context staged
+
+The WDI/ITU staged release
+`e1e31c3d06f23d821635af67dc91c7455b2731a3570087b39d46064a7a42656d`
+loads the versioned AWS Bronze dimension and observations. Counts match
+217 economies, 14,322 annual source rows and 214 economies with a historical
+value. In 2024, 151 of 217 economies had a reported value. The staging
+operator preserves provider codes. Its initial check rejected provider code
+`JG` under the stricter ISO validator. The corrected model keeps the provider
+code and leaves canonical map geography null when it has no ISO mapping.
+
+Authenticated REST and MCP over loopback served the genuine staged AWS
+release. Foreign workspace and anonymous access were denied. The probes
+verified distinct measured zero and unavailable states, rate values above
+100, annual precision and unavailable CVE exposure for Peru. Evidence is
+`data/evidence/v2-activation/{network-release,network-api-verification}.json`.
+There is no global CVE exposure claim or released V2 production route.
+
+## 2026-11-24T14:38Z — Interactive globe controls verified locally
+
+The shared workspace's `frontend/app/` moved during the activation. UI work
+continued on isolated branch `v2-ui-activation-20261124` at `7a2dfcb`,
+leaving the working tree move and the uncommitted implementation plan alone.
+Node 22.22.3 lint, typecheck and Nuxt build exited 0. All three local Chromium
+scenarios passed in 38.8 s. The desktop scenario verified zoom controls,
+keyboard rotation, drag resizing and fullscreen. Desktop, mobile and
+fullscreen screenshots are under `data/evidence/v2-activation/ui-globe/`.
+
+The fullscreen SwiftShader frame sample was five presented intervals over
+916.7 ms, approximately 5.45 FPS. This is a software-rendered local sample.
+The representative hardware performance target still needs measurement.
+The original pinned regression passed 90 Python tests and four TS contract
+tests. A later full suite passed 87 and stopped four cases at the existing
+1 GiB disk reserve. See `final-regression-python.log`. The guarded tests
+must be repeated when space is available.

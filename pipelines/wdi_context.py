@@ -8,6 +8,7 @@ import tempfile
 from collections import Counter
 from datetime import date
 from pathlib import Path
+from typing import Final
 
 import httpx
 import pyarrow as pa
@@ -18,7 +19,7 @@ from pipelines.config import project_environment
 from pipelines.io import DataError, digest, file_digest, write_json
 
 COUNTRIES_URI = "https://api.worldbank.org/v2/country?format=json&per_page=400"
-INDICATOR = "IT.CEL.SETS.P2"
+INDICATOR: Final = "IT.CEL.SETS.P2"
 INDICATOR_URI = (
     f"https://api.worldbank.org/v2/country/all/indicator/{INDICATOR}"
     "?format=json&per_page=20000&source=2"

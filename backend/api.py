@@ -36,6 +36,7 @@ from backend.models import (
     Vulnerability,
 )
 from backend.reader import SnapshotReader
+from backend.v2_network import NetworkContextReader, NetworkYear, WdiAlpha2
 
 if TYPE_CHECKING:
     from backend.investigations.service import InvestigationService
@@ -53,7 +54,7 @@ def error_response(error: ServiceError) -> JSONResponse:
     )
 
 
-async def mcp_result[T](call: Callable[[], Envelope[T]]) -> Envelope[T]:
+async def mcp_result[T](call: Callable[[], T]) -> T:
     try:
         return await anyio.to_thread.run_sync(call)
     except ServiceError as error:
@@ -66,11 +67,27 @@ def create_app(
     investigations: "InvestigationService | None" = None,
     *,
     runtime: bool = False,
+    network: NetworkContextReader | Callable[[], NetworkContextReader] | None = None,
 ) -> FastAPI:
     def snapshot_reader() -> SnapshotReader:
         return reader() if callable(reader) else reader
 
     mcp = FastMCP("AEGIS", stateless_http=True, json_response=True, streamable_http_path="/")
+
+    def network_reader() -> NetworkContextReader:
+        if network is None:
+            raise ServiceError("release_unavailable", "Network context is unavailable", 503)
+        return network() if callable(network) else network
+
+    if network is not None:
+
+        @mcp.tool()
+        async def get_global_network_context(
+            year: Annotated[int | None, Query(ge=1960, le=2100)] = None,
+            country_alpha2: WdiAlpha2 | None = None,
+        ) -> NetworkYear:
+            """Read annual WDI/ITU subscription statistics at the published economy grain."""
+            return await mcp_result(lambda: network_reader().year(year, country_alpha2))
 
     @mcp.tool()
     async def get_vulnerabilities(
@@ -202,6 +219,17 @@ def create_app(
         return snapshot_reader().evidence(evidence_id)
 
     app.include_router(routes)
+    if network is not None:
+        v2 = APIRouter(prefix="/v2", dependencies=[Depends(authenticate)])
+
+        @v2.get("/network")
+        def annual_network_context(
+            year: Annotated[int | None, Query(ge=1960, le=2100)] = None,
+            country_alpha2: WdiAlpha2 | None = None,
+        ) -> NetworkYear:
+            return network_reader().year(year, country_alpha2)
+
+        app.include_router(v2)
     if investigations is not None:
         from backend.investigations.routes import install
 
