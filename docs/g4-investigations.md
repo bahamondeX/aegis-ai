@@ -138,3 +138,21 @@ cross-session SSE replay, active cancellation, latency and measured model
 tokens. The development tests used temporary invited identities and
 disabled them after verification. Frontend and standalone API hosting
 remain separate from the approved runtime work.
+
+## Snapshot-bound mitigation
+
+The CVE card sends its exact `snapshot_id`, singleton `filters.cve_ids`,
+preserved country filters and a `mitigation` object with `cve_id` and
+evidence IDs from the authenticated card. The same graph resolves those
+references through the official MCP transport. An archived CISA required
+action is emitted as a cited claim after validation, visibly separate from
+availability and asset applicability. No new model route accepts raw advisory
+text or external instructions. The SOC/CSIRT draft stays in the operator's
+browser. The next AgentCore revision needs read access to the one pinned
+`snapshots/<release>/raw/00-cisa.json` object. The existing deployed runtime
+remains on its verified baseline.
+
+Component timing logs correlate by investigation trace ID. DuckDB/Athena
+read timings sit inside the MCP timing, while checkpoint updates and model
+selection have their own spans. Browser-to-first-event and full stream timing
+remain end-to-end measurements. Concurrent spans may overlap.

@@ -13,6 +13,14 @@ import duckdb
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
+from backend.geography import (
+    MapEnvelope,
+    NetworkContext,
+    NetworkLayer,
+    load_context,
+    unavailable_exposure,
+)
+from backend.investigations.timing import measure
 from backend.models import (
     Coverage,
     Edge,
@@ -154,6 +162,8 @@ class SnapshotReader:
         *,
         geo_available: bool,
         athena: bool = False,
+        cisa_archive: Callable[[], bytes] | None = None,
+        network: tuple[NetworkContext, ...] = (),
     ) -> None:
         self.snapshot = snapshot
         self.score_date = score_date
@@ -161,6 +171,8 @@ class SnapshotReader:
         self.table = table
         self.geo_available = geo_available
         self.athena = athena
+        self.cisa_archive = cisa_archive
+        self.network = network
         self.slots = BoundedSemaphore(2)
 
     @classmethod
@@ -186,17 +198,32 @@ class SnapshotReader:
                     timer.cancel()
                     timer.join()
 
+        def cisa_archive() -> bytes:
+            with (folder / "raw" / "00-cisa.json").open("rb") as raw:
+                blob = raw.read(4 * 1024 * 1024 + 1)
+            if len(blob) > 4 * 1024 * 1024:
+                raise DataError("CISA archive exceeds its byte budget")
+            return blob
+
         return cls(
             run.run_id,
             max(run.epss_history),
             read,
             lambda name: name,
             geo_available=manifest["geometry"]["status"] == "available",
+            cisa_archive=cisa_archive,
+            network=load_context(root / "network" / str(run.run_id), run.run_id),
         )
 
     @classmethod
     def cloud(
-        cls, reader: AthenaReader, release: Published, *, geo_available: bool
+        cls,
+        reader: AthenaReader,
+        release: Published,
+        *,
+        geo_available: bool,
+        cisa_archive: Callable[[], bytes] | None = None,
+        network: tuple[NetworkContext, ...] = (),
     ) -> "SnapshotReader":
         def table(name: str) -> str:
             if name == "fact_epss_latest":
@@ -222,13 +249,16 @@ class SnapshotReader:
             table,
             geo_available=geo_available,
             athena=True,
+            cisa_archive=cisa_archive,
+            network=network,
         )
 
     def rows(self, sql: str, params: list[Param], max_rows: int) -> list[Row]:
         if not self.slots.acquire(blocking=False):
             raise ServiceError("busy", "query capacity is temporarily exhausted", 503)
         try:
-            return self.read(sql, params, max_rows)
+            with measure("athena.read" if self.athena else "duckdb.read"):
+                return self.read(sql, params, max_rows)
         except duckdb.InterruptException as error:
             raise ServiceError("timeout", "query budget exceeded", 504) from error
         except (BotoCoreError, ClientError, DataError, duckdb.Error) as error:
@@ -269,7 +299,44 @@ class SnapshotReader:
         return self.envelope(summary, regional=filters.country_iso2 is not None)
 
     def map(self, filters: Filters) -> Envelope[list[Exposure]]:
-        return self.envelope(self.view_rows(View.MAP, filters, Exposure), regional=True)
+        return Envelope(
+            snapshot_id=self.snapshot,
+            score_date=self.score_date,
+            coverage=self.coverage(),
+            availability="unavailable",
+            data=[],
+        )
+
+    @cached_property
+    def archived_kev(self) -> bytes | None:
+        return self.cisa_archive() if self.cisa_archive else None
+
+    def geography(self, filters: Filters) -> MapEnvelope:
+        # No current source is qualified for exposure. Prior lake data alone cannot grant
+        # publication permission or establish a measured zero.
+        records = [
+            row
+            for row in self.network
+            if filters.country_iso2 is None or filters.country_iso2 == row.country_iso2
+        ]
+        network = NetworkLayer(
+            state="available" if records else "unavailable",
+            records=records,
+            note=(
+                "Published network context for the selected area."
+                if records
+                else "No qualified network context covers the selected area."
+            ),
+        )
+        return MapEnvelope(
+            snapshot_id=self.snapshot,
+            score_date=self.score_date,
+            coverage=self.coverage(),
+            availability="unavailable",
+            data=[],
+            exposure=unavailable_exposure(filters.country_iso2),
+            network=network,
+        )
 
     def graph(self, filters: Filters) -> Envelope[list[Edge]]:
         return self.envelope(

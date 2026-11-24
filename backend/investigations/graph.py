@@ -10,6 +10,7 @@ from mcp import ClientSession
 from backend.investigations.bedrock import ModelSelection, Select
 from backend.investigations.contracts import (
     Analytics,
+    Claim,
     EvidenceAdded,
     EvidenceEvent,
     FilterProposal,
@@ -28,6 +29,7 @@ from backend.investigations.research import (
     plan_request,
     supported_claims,
 )
+from backend.investigations.timing import measure
 from backend.models import ServiceError
 
 Emit = Callable[[type, Any], Awaitable[None]]
@@ -57,7 +59,7 @@ def geography_note(plan: Plan, results: Research) -> str:
     if results.geography.availability == "unavailable":
         return "Verified geographic exposure is unavailable for this snapshot and scope."
     if not results.geography.data:
-        return "The selected scope returned zero geographic observations."
+        return "The selected scope has no published observation or measured zero."
     return "Geographic observations are scoped to the source, snapshot and unit shown."
 
 
@@ -91,7 +93,8 @@ async def execute(
         if select is None or not candidates:
             return {"selection": None}
         try:
-            result = await select(candidates)
+            with measure("bedrock.selection"):
+                result = await select(candidates)
         except ServiceError as error:
             return {"selection": None, "errors": [*current.get("errors", []), error.code]}
         return {"selection": result.selection, "usage": [*current.get("usage", []), result.usage]}
@@ -111,6 +114,15 @@ async def execute(
             return {"revision_count": 1, "revise": True}
         if used_model and chosen:
             claims = [claim for claim in claims if claim.key in chosen.keys]
+        if scope.mitigation and findings.mitigation:
+            guidance = findings.mitigation
+            claims.append(
+                Claim(
+                    key=f"{scope.mitigation.cve_id}/mitigation",
+                    text=f"CISA KEV required action: {guidance.text}",
+                    evidence_ids=[guidance.evidence_id],
+                )
+            )
         if any(not set(claim.evidence_ids) <= set(current["evidence_ids"]) for claim in claims):
             raise ServiceError("ungrounded_report", "report failed evidence validation", 503)
         recommendations = (
@@ -121,6 +133,19 @@ async def execute(
             if claims
             else []
         )
+        if scope.mitigation:
+            recommendations = [
+                "Confirm the product, deployed version, configuration and exposure in your "
+                "authorized inventory before applying vendor guidance.",
+                *(
+                    []
+                    if findings.mitigation
+                    else [
+                        "This release has no verified mitigation text. Review the citations and "
+                        "ask your SOC or CSIRT to confirm applicable guidance."
+                    ]
+                ),
+            ]
         return {
             "revise": False,
             "report": Report(

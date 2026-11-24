@@ -6,21 +6,8 @@ import {
   acceptProposal, begin, editFilters, receive, type InvestigationView,
 } from '../../investigations/view'
 
-export interface Vulnerability {
-  cve_id: string
-  description: string
-  kev: boolean
-  kev_added_at: string
-  severity: string | null
-  cvss_score: number | null
-  cvss_version: string | null
-  cvss_source: string | null
-  epss: number | null
-  percentile: number | null
-  score_date: string | null
-  source_refs: string[]
-  epss_evidence_id: string | null
-}
+import type { CveDetail, MapProjection, Vulnerability } from '../../investigations/geography'
+import { verifiedDetail, verifiedMap } from '../../investigations/read-contracts'
 
 type Coverage = Report['coverage'][number]
 
@@ -37,7 +24,7 @@ interface SnapshotData {
   kpis: Envelope<RiskSummary>
   cves: Vulnerability[]
   graph: Edge[]
-  geo: Envelope<Exposure[]>
+  geo: Envelope<Exposure[]> & MapProjection
 }
 
 const initialFilters: Filters = { kev_only: true, limit: 60 }
@@ -60,12 +47,18 @@ export function useDashboard() {
   })
   const evidenceIndex = shallowRef<Record<string, Evidence>>({})
   const selectedEvidence = shallowRef<Evidence>()
+  const detail = shallowRef<CveDetail>()
+  const detailLoading = ref(false)
+  const detailError = ref('')
+  const mitigationCve = ref('')
+  const mitigationCountry = ref<string | null>()
   const events = shallowRef<InvestigationEvent[]>([])
   const report = shallowRef<Report>()
   const running = ref(false)
   const investigationError = ref('')
   const proposalHistory = shallowRef<{ id: string; sequence: number }[]>([])
   let dataRequest: AbortController | undefined
+  let detailRequest: AbortController | undefined
   let investigation: AbortController | undefined
   let requestKey = ''
 
@@ -119,13 +112,15 @@ export function useDashboard() {
         for (const row of cves.data.slice(0, 8)) graphFilters.append('cve_ids', row.cve_id)
       }
       const graph = await request<Envelope<Edge[]>>('v1/graph', signal, '?' + graphFilters)
-      const geo = await request<Envelope<Exposure[]>>('v1/map', signal, suffix)
+      const geo = verifiedMap(await request<Envelope<Exposure[]>>('v1/map', signal, suffix))
       if (signal.aborted || token !== auth.token.value) return
       if ([kpis, cves, graph, geo].some(item =>
         item.snapshot_id !== coverage.snapshot_id || item.score_date !== coverage.score_date,
       )) throw new Error('Data services disagree on the active snapshot.')
       if (view.value.snapshot && view.value.snapshot !== coverage.snapshot_id) {
         investigation?.abort()
+        closeDetail()
+        mitigationCve.value = ''
         events.value = []
         report.value = undefined
         evidenceIndex.value = {}
@@ -145,12 +140,52 @@ export function useDashboard() {
   }
 
   async function changeFilters(next: Filters) {
+    closeDetail()
     view.value = editFilters(view.value, next)
     await load()
   }
 
-  async function start(question: string, scope?: 'global' | 'regional') {
+  function closeDetail() {
+    detailRequest?.abort()
+    detail.value = undefined
+    detailError.value = ''
+    detailLoading.value = false
+  }
+
+  async function openDetail(cve: string) {
+    closeDetail()
+    const snapshot = view.value.snapshot
+    const country = filters.value.country_iso2
+    const token = auth.token.value
+    if (!snapshot || !token) return
+    const controller = new AbortController()
+    detailRequest = controller
+    detailLoading.value = true
+    const query = new URLSearchParams({ snapshot_id: snapshot })
+    if (country) query.set('country_iso2', country)
+    try {
+      const current = verifiedDetail(await request<unknown>('v1/cves/' + cve, controller.signal, '?' + query))
+      if (controller.signal.aborted || snapshot !== view.value.snapshot || token !== auth.token.value) return
+      if (current.snapshot_id !== snapshot || current.vulnerability.cve_id !== cve ||
+        current.geography.country_iso2 !== (country ?? null)) throw new Error()
+      detail.value = current
+      evidenceIndex.value = {
+        ...evidenceIndex.value,
+        ...Object.fromEntries(current.evidence.map(item => [item.evidence_id, item])),
+      }
+    } catch {
+      if (!controller.signal.aborted) detailError.value = 'The CVE could not be verified against this snapshot.'
+    } finally {
+      if (detailRequest === controller) detailLoading.value = false
+    }
+  }
+
+  async function start(question: string, scope?: 'global' | 'regional', context?: CveDetail) {
     if (!question.trim() || running.value || !view.value.snapshot) return
+    if (context && (context.snapshot_id !== view.value.snapshot ||
+      context.geography.country_iso2 !== (filters.value.country_iso2 ?? null))) return
+    mitigationCve.value = context?.vulnerability.cve_id ?? ''
+    mitigationCountry.value = filters.value.country_iso2
     const controller = new AbortController()
     investigation = controller
     view.value = begin(view.value, view.value.snapshot)
@@ -169,7 +204,11 @@ export function useDashboard() {
         request: {
           question,
           snapshot_id: view.value.snapshot,
-          filters: filters.value,
+          filters: context ? { ...filters.value, cve_ids: [context.vulnerability.cve_id] } : filters.value,
+          mitigation: context ? {
+            cve_id: context.vulnerability.cve_id,
+            evidence_ids: context.evidence.map(item => item.evidence_id),
+          } : undefined,
           scope: filters.value.country_iso2 ? 'regional' : scope,
         },
       })
@@ -243,6 +282,8 @@ export function useDashboard() {
 
   watch(auth.token, () => {
     investigation?.abort()
+    closeDetail()
+    mitigationCve.value = ''
     view.value = begin(view.value, '')
     events.value = []
     report.value = undefined
@@ -252,12 +293,14 @@ export function useDashboard() {
   }, { immediate: true })
   onScopeDispose(() => {
     dataRequest?.abort()
+    detailRequest?.abort()
     investigation?.abort()
   })
 
   return {
     status, error, data, scoreDate, view, filters, events, report, running, steps,
     investigationError, evidenceIndex, selectedEvidence, proposalHistory,
-    load, changeFilters, start, cancel, applyProposal, inspect,
+    detail, detailLoading, detailError, mitigationCve, mitigationCountry,
+    load, changeFilters, start, cancel, applyProposal, inspect, openDetail, closeDetail,
   }
 }

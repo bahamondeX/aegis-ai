@@ -25,6 +25,7 @@ from pipelines.config import ROOT, configured_snapshot, project_environment
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cognito", action="store_true")
+    parser.add_argument("--evidence-dir", default="evidence/g5")
     args = parser.parse_args()
     configuration = project_environment()
     root = Path(configuration.get("AEGIS_DATA_DIR") or "data").resolve()
@@ -34,7 +35,7 @@ def main() -> None:
     artifact = frontend / ".output/server/index.mjs"
     if not artifact.is_file():
         raise SystemExit("Build the Nuxt production artifact first")
-    evidence = root / "evidence/g5"
+    evidence = root / args.evidence_dir
     evidence.mkdir(parents=True, exist_ok=True)
     local_node = root / "toolchain" / f"node-{node_pin}" / "bin/node"
     node = str(local_node) if local_node.is_file() else "node"

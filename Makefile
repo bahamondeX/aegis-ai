@@ -81,3 +81,7 @@ smoke-ui:
 
 $(G2_TARGETS):
 	$(LAKE) $@ $(SELECT) $(LATEST_SELECT)
+
+.PHONY: smoke-ui-extension
+smoke-ui-extension:
+	$(RUN) python -m scripts.smoke_dashboard --evidence-dir evidence/g5-extension

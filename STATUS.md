@@ -586,3 +586,36 @@ Evidence is under `data/evidence/agentcore/` in `deploy-identity.log`,
 The verified deployed image digest is `sha256:6056e1cd…df12248`.
 The existing G2 stacks and their guards were preserved. Standalone API
 and static site hosting are outside the AgentCore deployment scope.
+
+## 2026-11-24T05:17:50Z — G5 extension, mandatory local acceptance PASS
+
+Reconciled prior gate commits `a63a46f`, `ff203dd`, `cbd82bf`,
+`94eebd0`, and `15c4e94`. Contract review commit `7e191f1` precedes
+geographic reads and the journey extension. The updated working copy of
+IMPLEMENTATION_PLAN.md was preserved. Eight Iceberg tables and the selected
+release `4e13ca6b-c2e1-4407-88bc-c362da7dbacb` remain intact.
+
+| Command | Exit | Measured result and evidence |
+| --- | ---: | --- |
+| `python -m scripts.stage_network_context` with pinned archive and UTC capture time in source register | 0 twice | 14 immutable context rows. The CRTC Open Data catalog confirmed the archive and Open Government Licence. C-T5 supplies national and 13 regional LTE population rates for 2021. Ontario filters use the regulator row while retaining the country contour. `data/evidence/continuation/{crtc-metadata.json,stage-network.log}`. |
+| `make lint typecheck test verify-phase1` | 0 each | 61 Python tests on the continuation working tree, real snapshot replay matched Parquet SHA-256 and sampled queries. `data/evidence/continuation/python-final-r2.log`. |
+| `make smoke-local smoke-investigation smoke-agent-local` | 0 each | Seven REST baseline routes, six MCP tools, API and runtime journals, ordered SSE, replay and active cancellation. API 6.56 ms first event and 436.87 ms total, runtime loopback 5.81 ms and 428.44 ms. Shared release, deterministic mode, zero model calls. |
+| `make lint-ui typecheck-ui build-ui` and `sh scripts/frontend.sh test` | 0 each | Strict type checking, Nuxt 4 production build and four frontend contract tests. Known Nuxt DevTools deprecation and bundle-size advisory remain. `ui-final-r2.log`, `ui-unit-final.log`. |
+| `make smoke-ui-extension` | 0 | Three real Chromium cases in 26.5 s, authenticated production-mode Nuxt, worldwide and tactical visuals, Peru and Canada, separate layers, evidence detail, ordered SSE, no outbound help POST, responsive layout and zero uncaught browser errors. `data/evidence/continuation/browser-final-r2.log`. Screenshots under `data/evidence/g5-extension/` inspected for world, tactical, CVE detail, handoff, desktop and mobile. |
+
+The first integration loop found that adding absent mitigation metadata
+altered the established MCP payload. The second preserved the original
+serialization. The first browser loop used the textarea text node
+instead of its editable value. The corrected browser check verifies the
+draft's contents and local editing.
+
+Network context is enabled locally for the regulator series above.
+OSIPTEL resource access returned HTTP 403. The other candidates and their
+rights are recorded in `docs/source-register.md`. Conditional CVE
+exposure is unavailable. Rendered positive geographic exposure, measured
+zero, verified private site and SOC incident scenarios were not run.
+There were zero CVE observations and no private site fields in the new
+public-safe projection. All intelligence paths in this verification
+required authenticated workspace access.
+
+Next action is G6 local hosting validation and G7 evidence reconciliation.

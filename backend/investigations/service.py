@@ -30,6 +30,7 @@ from backend.investigations.contracts import (
 from backend.investigations.graph import execute
 from backend.investigations.research import connect_tools
 from backend.investigations.store import Store
+from backend.investigations.timing import measure, trace
 from backend.models import ServiceError
 
 RUN_SECONDS = 45
@@ -126,19 +127,22 @@ class InvestigationService:
         return current, False
 
     def mutate(self, record: Record, update: Callable[[Record], None]) -> Record:
-        for _ in range(3):
-            stored = self.store.get(str(record.id))
-            if stored is None:
-                raise ServiceError("not_found", "investigation checkpoint was not found", 503)
-            current = Record.model_validate_json(stored.data)
-            if current.owner != record.owner:
-                raise ServiceError("not_found", "investigation was not found", 404)
-            if current.status != "running":
-                return current
-            update(current)
-            if self.store.put(str(current.id), current.model_dump_json().encode(), stored.token):
-                return current
-        raise ServiceError("checkpoint_conflict", "checkpoint update conflicted", 503)
+        with measure("checkpoint.update"):
+            for _ in range(3):
+                stored = self.store.get(str(record.id))
+                if stored is None:
+                    raise ServiceError("not_found", "investigation checkpoint was not found", 503)
+                current = Record.model_validate_json(stored.data)
+                if current.owner != record.owner:
+                    raise ServiceError("not_found", "investigation was not found", 404)
+                if current.status != "running":
+                    return current
+                update(current)
+                if self.store.put(
+                    str(current.id), current.model_dump_json().encode(), stored.token
+                ):
+                    return current
+            raise ServiceError("checkpoint_conflict", "checkpoint update conflicted", 503)
 
     async def cancel(self, identifier: UUID, owner: str) -> Record:
         record = await asyncio.to_thread(self.get, identifier, owner)
@@ -167,6 +171,7 @@ class InvestigationService:
             if current.status != "running":
                 raise asyncio.CancelledError
 
+        context = trace.set(record.trace)
         try:
             async with (
                 asyncio.timeout(RUN_SECONDS),
@@ -220,6 +225,8 @@ class InvestigationService:
                 item.finish("failed")
 
             await asyncio.to_thread(self.mutate, record, failed)
+        finally:
+            trace.reset(context)
 
     async def stream(
         self, initial: Record, after: int, task: asyncio.Task[None] | None

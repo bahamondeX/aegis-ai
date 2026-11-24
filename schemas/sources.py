@@ -39,6 +39,7 @@ class KevRecord(BaseModel):
     dateAdded: date
     dueDate: date
     knownRansomwareCampaignUse: Literal["Known", "Unknown"]
+    requiredAction: str | None = None
     cwes: list[str] = Field(default_factory=list)
 
 
@@ -102,6 +103,10 @@ class NvdMatch(BaseModel):
     vulnerable: bool
     criteria: Nonempty
     matchCriteriaId: UUID
+    versionStartIncluding: str | None = None
+    versionStartExcluding: str | None = None
+    versionEndIncluding: str | None = None
+    versionEndExcluding: str | None = None
 
 
 class NvdNode(BaseModel):

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ArrowUp, Bot, Check, CircuitBoard, FileText, ListFilter, Square } from '@lucide/vue'
+import { handoffSummary } from '../../investigations/geography'
 import type { FilterProposal, Report } from '../../investigations/events'
 
 interface Step { id: number; label: string; revision: number }
-defineProps<{
+const props = defineProps<{
   ready: boolean; running: boolean; steps: Step[]; report?: Report;
+  mitigationCve: string; mitigationCountry?: string | null;
   proposal?: FilterProposal; error: string; applied: number;
 }>()
 const emits = defineEmits<{
@@ -12,6 +14,17 @@ const emits = defineEmits<{
   stop: []; apply: []; inspect: [id: string];
 }>()
 const question = ref('')
+const helpOpen = ref(false)
+const draft = ref('')
+watch(() => props.report, () => {
+  helpOpen.value = false
+  draft.value = ''
+})
+function requestHelp() {
+  if (!props.report || !props.mitigationCve) return
+  draft.value = handoffSummary(props.mitigationCve, props.report, props.mitigationCountry)
+  helpOpen.value = true
+}
 const scope = ref<'' | 'global' | 'regional'>('')
 function submit() {
   const value = question.value.trim()
@@ -28,7 +41,7 @@ const suggestions = [
     <header class="panel-header">
       <div class="panel-title">
         <span class="icon-tile"><Bot :size="18" aria-hidden="true" /></span>
-        <div><h2 id="investigation-title">Investigation workspace</h2><p>Evidence-backed analyst</p></div>
+        <div><h2 id="investigation-title" tabindex="-1">Investigation workspace</h2><p>Evidence-backed analyst</p></div>
       </div>
       <span class="small-count"><span class="status-dot" :class="{ pulse: running }" /> {{ running ? 'RUNNING' : 'READY' }}</span>
     </header>
@@ -66,6 +79,12 @@ v-for="suggestion in suggestions" :key="suggestion" type="button" :disabled="!re
         </ul>
         <p>{{ report.geographic_note }}</p>
         <p v-for="recommendation in report.recommendations" :key="recommendation">{{ recommendation }}</p>
+        <UButton v-if="mitigationCve" type="button" variant="soft" @click="requestHelp">Request help</UButton>
+        <div v-if="helpOpen" class="handoff">
+          <label for="help-summary">SOC / CSIRT handoff draft</label>
+          <textarea id="help-summary" v-model="draft" rows="9" maxlength="12000" />
+          <p>Review and edit this draft before sharing it through your organization’s approved channel. FIRST maintains a CSIRT directory.</p>
+        </div>
       </article>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     </div>

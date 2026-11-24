@@ -4,6 +4,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
+from uuid import UUID
 
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Query, Request, Security
@@ -16,21 +17,27 @@ from starlette.datastructures import Headers
 from starlette.types import Receive, Scope, Send
 
 from backend.auth import Auth
+from backend.cve_detail import detail, guidance
+from backend.geography import MapEnvelope
 from backend.investigations.routes import install
 from backend.investigations.service import InvestigationService
 from backend.models import (
+    Country,
     Coverage,
+    CveDetail,
     Edge,
     Envelope,
     Evidence,
     EvidenceId,
     Exposure,
     Filters,
+    MitigationVulnerability,
     RiskSummary,
     ServiceError,
     Vulnerability,
 )
 from backend.reader import SnapshotReader
+from schemas.sources import CveId
 
 FilterQuery = Annotated[Filters, Query()]
 Token = Annotated[HTTPAuthorizationCredentials | None, Security(HTTPBearer(auto_error=False))]
@@ -62,9 +69,31 @@ def create_app(
     mcp = FastMCP("AEGIS", stateless_http=True, json_response=True, streamable_http_path="/")
 
     @mcp.tool()
-    async def get_vulnerabilities(filters: Filters | None = None) -> Envelope[list[Vulnerability]]:
-        """Read ranked documented vulnerabilities with source evidence."""
-        return await mcp_result(lambda: reader.vulnerabilities(filters or Filters()))
+    async def get_vulnerabilities(
+        filters: Filters | None = None, include_mitigation: bool = False
+    ) -> Envelope[list[MitigationVulnerability]]:
+        """Read ranked vulnerabilities. Archived guidance requires a single explicit CVE."""
+
+        def read() -> Envelope[list[MitigationVulnerability]]:
+            selection = filters or Filters()
+            if include_mitigation and (
+                len(selection.cve_ids) != 1 or selection.country_iso2 or selection.limit != 1
+            ):
+                raise ServiceError(
+                    "invalid_scope", "mitigation requires a single explicit CVE", 422
+                )
+            ranked = reader.vulnerabilities(selection)
+            records = []
+            for row in ranked.data:
+                text = (
+                    guidance(reader, row.cve_id, row.source_refs[0])
+                    if include_mitigation and row.kev and row.source_refs
+                    else None
+                )
+                records.append(MitigationVulnerability(**row.model_dump(), mitigation=text))
+            return reader.envelope(records, regional=selection.country_iso2 is not None)
+
+        return await mcp_result(read)
 
     @mcp.tool()
     async def get_risk_summary(filters: Filters | None = None) -> Envelope[RiskSummary]:
@@ -146,13 +175,19 @@ def create_app(
     def vulnerabilities(filters: FilterQuery) -> Envelope[list[Vulnerability]]:
         return reader.vulnerabilities(filters)
 
+    @routes.get("/cves/{cve_id}")
+    def cve_detail(
+        cve_id: CveId, snapshot_id: UUID, country_iso2: Country | None = None
+    ) -> CveDetail:
+        return detail(reader, cve_id, snapshot_id, country_iso2)
+
     @routes.get("/kpis")
     def risk(filters: FilterQuery) -> Envelope[RiskSummary]:
         return reader.risk(filters)
 
     @routes.get("/map")
-    def exposure(filters: FilterQuery) -> Envelope[list[Exposure]]:
-        return reader.map(filters)
+    def exposure(filters: FilterQuery) -> MapEnvelope:
+        return reader.geography(filters)
 
     @routes.get("/graph")
     def graph(filters: FilterQuery) -> Envelope[list[Edge]]:

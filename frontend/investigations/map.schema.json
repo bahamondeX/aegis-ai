@@ -1,0 +1,538 @@
+{
+  "$defs": {
+    "Coverage": {
+      "properties": {
+        "source": {
+          "enum": [
+            "cisa",
+            "epss",
+            "nvd",
+            "shodan"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "partial",
+            "blocked",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "row_count": {
+          "title": "Row Count",
+          "type": "integer"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "source_date": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Date"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Retrieved At"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Code"
+        }
+      },
+      "required": [
+        "source",
+        "status",
+        "row_count",
+        "coverage",
+        "source_date",
+        "retrieved_at",
+        "duration_ms",
+        "error_code"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "Exposure": {
+      "properties": {
+        "cve_id": {
+          "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$",
+          "title": "Cve Id",
+          "type": "string"
+        },
+        "country_iso2": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Country Iso2",
+          "type": "string"
+        },
+        "snapshot_at": {
+          "format": "date-time",
+          "title": "Snapshot At",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Count"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "evidence_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cve_id",
+        "country_iso2",
+        "snapshot_at",
+        "source",
+        "scope",
+        "count",
+        "unit",
+        "confidence",
+        "coverage",
+        "evidence_id"
+      ],
+      "title": "Exposure",
+      "type": "object"
+    },
+    "GeographyCoverage": {
+      "properties": {
+        "state": {
+          "enum": [
+            "unavailable",
+            "measured_zero",
+            "observed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "observed_exposure",
+            "sensor_attempt",
+            "confirmed_incident"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "country_iso2": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Country Iso2"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "enum": [
+                "country",
+                "region"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Precision"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "window_start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start"
+        },
+        "window_end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End"
+        },
+        "evidence_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Id"
+        }
+      },
+      "required": [
+        "state",
+        "category"
+      ],
+      "title": "GeographyCoverage",
+      "type": "object"
+    },
+    "NetworkContext": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "operational_presence",
+            "published_coverage",
+            "registration_country"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "operator": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operator"
+        },
+        "country_iso2": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Country Iso2",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "scope": {
+          "maxLength": 280,
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "source_date": {
+          "format": "date",
+          "title": "Source Date",
+          "type": "string"
+        },
+        "reporting_year": {
+          "anyOf": [
+            {
+              "maximum": 2200,
+              "minimum": 1900,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reporting Year"
+        },
+        "population_coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Population Coverage"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "publication": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Publication",
+          "type": "string"
+        },
+        "publisher": {
+          "title": "Publisher",
+          "type": "string"
+        },
+        "license": {
+          "title": "License",
+          "type": "string"
+        },
+        "checksum": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checksum",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "kind",
+        "country_iso2",
+        "scope",
+        "source_date",
+        "retrieved_at",
+        "publication",
+        "publisher",
+        "license",
+        "checksum"
+      ],
+      "title": "NetworkContext",
+      "type": "object"
+    },
+    "NetworkLayer": {
+      "properties": {
+        "state": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/NetworkContext"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "records",
+        "note"
+      ],
+      "title": "NetworkLayer",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "snapshot_id": {
+      "format": "uuid",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "score_date": {
+      "format": "date",
+      "title": "Score Date",
+      "type": "string"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/Coverage"
+      },
+      "title": "Coverage",
+      "type": "array"
+    },
+    "cohort": {
+      "const": "cisa_kev",
+      "default": "cisa_kev",
+      "title": "Cohort",
+      "type": "string"
+    },
+    "availability": {
+      "default": "available",
+      "enum": [
+        "available",
+        "unavailable"
+      ],
+      "title": "Availability",
+      "type": "string"
+    },
+    "data": {
+      "items": {
+        "$ref": "#/$defs/Exposure"
+      },
+      "title": "Data",
+      "type": "array"
+    },
+    "geography_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Geography Version",
+      "type": "integer"
+    },
+    "network": {
+      "$ref": "#/$defs/NetworkLayer"
+    },
+    "exposure": {
+      "$ref": "#/$defs/GeographyCoverage"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "score_date",
+    "coverage",
+    "data",
+    "network",
+    "exposure"
+  ],
+  "title": "MapEnvelope",
+  "type": "object"
+}

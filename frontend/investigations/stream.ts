@@ -1,6 +1,7 @@
 import { Ajv } from 'ajv'
 import addFormatsModule from 'ajv-formats'
 
+import type { MitigationContext } from './geography.js'
 import type { Filters, InvestigationEvent } from './events.js'
 import eventSchema from './events.schema.json' with { type: 'json' }
 
@@ -15,6 +16,7 @@ interface InvestigationRequest {
   scope?: 'global' | 'regional'
   filters?: Filters
   snapshot_id?: string
+  mitigation?: MitigationContext
 }
 
 interface StreamOptions {

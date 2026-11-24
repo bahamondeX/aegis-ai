@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChartNoAxesCombined } from '@lucide/vue'
 import type { ECharts } from 'echarts/core'
-import type { Vulnerability } from '../composables/useDashboard'
+import type { Vulnerability } from '../../investigations/geography'
 
 const props = defineProps<{ rows: Vulnerability[] }>()
 const container = ref<HTMLElement>()

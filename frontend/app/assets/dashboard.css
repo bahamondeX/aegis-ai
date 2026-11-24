@@ -225,3 +225,28 @@ tbody tr:hover { background: #162636; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+.cve-detail { width: min(44rem, calc(100vw - 2rem)); max-height: min(88dvh, 55rem); padding: 1.5rem; margin: auto; overflow: auto; color: inherit; }
+.cve-detail::backdrop { background: #090e17cc; }
+.cve-detail header, .cve-source-actions, .layer-controls { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+.cve-detail header { justify-content: space-between; }
+.cve-detail h2 { font-weight: 700; font-size: 1.35rem; }
+.cve-detail h3 { font-weight: 600; margin-top: 1rem; margin-bottom: .25rem; }
+.cve-detail p { margin-block: .5rem; }
+.cve-detail .primary-action { margin-top: 1rem; }
+.cve-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .65rem; margin-block: 1rem; }
+.cve-facts div { padding: .65rem; background: #172332; border-radius: 8px; overflow-wrap: anywhere; }
+.cve-facts dt, .layer-key { font-size: .78rem; color: #bcc8d7; }
+.cvss-value { color: #ff9191; }
+.handoff { margin-top: .75rem; }
+.handoff textarea { display: block; width: 100%; color: inherit; background: #101722; padding: .6rem; border: 1px solid #45586e; border-radius: 6px; }
+.layer-controls { padding: .55rem .85rem; border-bottom: 1px solid #334051; }
+.layer-controls select { background: #202d3d; color: #e2ebf4; padding: .3rem; border-radius: .3rem; max-width: 100%; }
+.layer-key { display: flex; flex-wrap: wrap; gap: .3rem 1rem; padding: .65rem .85rem; }
+.layer-key i { display: inline-block; width: .7rem; height: .7rem; border-radius: .2rem; margin-right: .25rem; }
+.network-key { background: #547995; } .aggregate-key { background: #e4a74d; }
+.unavailable-key { background: #8793a4; } .zero-key { border: 1px solid #eef3f8; }
+.applicability { margin-block: .4rem; }
+.applicability summary { cursor: pointer; color: #8cdfce; }
+.applicability ul { margin: .55rem 0 .55rem 1rem; }
+.handoff:has(textarea:focus) textarea { scroll-margin-block: 1rem; }

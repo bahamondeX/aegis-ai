@@ -1,10 +1,10 @@
 """Wire contracts for investigation requests, reports, and SSE."""
 
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from backend.models import Coverage, Edge, Evidence, EvidenceId, Exposure, Filters, RiskSummary
 from schemas.sources import CveId
@@ -15,6 +15,13 @@ RegionScope = Literal["global", "country", "unsupported_region"]
 RunStatus = Literal["completed", "failed", "cancelled", "interrupted"]
 
 
+class MitigationContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cve_id: CveId
+    evidence_ids: tuple[EvidenceId, ...] = Field(min_length=1, max_length=4)
+
+
 class Request(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -22,6 +29,15 @@ class Request(BaseModel):
     filters: Filters = Field(default_factory=Filters)
     snapshot_id: UUID | None = None
     scope: Literal["global", "regional"] | None = None
+    mitigation: MitigationContext | None = None
+
+    @model_validator(mode="after")
+    def validate_mitigation(self) -> Self:
+        if self.mitigation and (
+            self.snapshot_id is None or self.filters.cve_ids != (self.mitigation.cve_id,)
+        ):
+            raise ValueError("mitigation requires its release and the same explicit CVE filter")
+        return self
 
 
 class CancelRequest(BaseModel):
@@ -34,6 +50,7 @@ class CancelRequest(BaseModel):
 class Plan(BaseModel):
     filters: Filters
     scope: RegionScope
+    mitigation: MitigationContext | None = None
 
 
 class Claim(BaseModel):

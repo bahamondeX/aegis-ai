@@ -4,7 +4,7 @@ import { Crosshair, GitFork, Minus, Plus, RotateCcw } from '@lucide/vue'
 import type { Edge } from '../../investigations/events'
 
 const props = defineProps<{ edges: Edge[] }>()
-const emit = defineEmits<{ inspect: [id: string]; filter: [id: string] }>()
+const emit = defineEmits<{ inspect: [id: string]; filter: [id: string]; detail: [id: string] }>()
 const container = ref<HTMLElement>()
 const selected = ref('')
 const hasError = ref(false)
@@ -102,7 +102,7 @@ onMounted(async () => {
     })
     cy.on('tap', 'node[kind = "cve"]', (event) => {
       const id: unknown = event.target.id()
-      if (typeof id === 'string') emit('filter', id)
+      if (typeof id === 'string') emit('detail', id)
     })
     resize = new ResizeObserver(() => { cy?.resize(); fit() })
     resize.observe(container.value)
@@ -152,6 +152,10 @@ v-for="row in displayed" :key="row.evidence_id + row.target_id + row.cve_id"
                   :value="row.evidence_id + row.target_id">{{ row.cve_id }} · {{ row.target_label }}</option>
         </select>
       </label>
+      <div v-if="chosen" class="cve-source-actions">
+        <button type="button" class="text-button" @click="emit('detail', chosen.cve_id)">Open CVE detail</button>
+        <button type="button" class="text-button" @click="emit('filter', chosen.cve_id)">Filter workspace to CVE</button>
+      </div>
       <UButton v-if="chosen" size="xs" variant="soft" @click="emit('inspect', chosen.evidence_id)">Evidence</UButton>
     </footer>
   </section>

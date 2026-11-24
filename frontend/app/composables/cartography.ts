@@ -23,6 +23,10 @@ export function countryBorders() {
 }
 
 export function observedCountries(observations: Exposure[]) {
-  const codes = new Set(observations.map(row => alpha2ToNumeric(row.country_iso2)))
+  return countryFeatures(observations.filter(row => (row.count ?? 0) > 0).map(row => row.country_iso2))
+}
+
+export function countryFeatures(countries: string[]) {
+  const codes = new Set(countries.map(alpha2ToNumeric))
   return outlines.features.filter(row => row.id !== undefined && codes.has(String(row.id)))
 }

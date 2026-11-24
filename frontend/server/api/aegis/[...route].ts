@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-const reads = /^(health|v1\/(coverage|cves|kpis|graph|map|evidence\/[a-f0-9]{64}))$/
+const reads = /^(health|v1\/(coverage|cves(?:\/CVE-\d{4}-\d{4,24})?|kpis|graph|map|evidence\/[a-f0-9]{64}))$/
 const cancellation = /^v1\/investigations\/([a-f0-9-]{36})\/cancel$/
 
 export default defineEventHandler(async (event) => {

@@ -41,3 +41,22 @@ The extension operates locally. Future cloud execution requires an
 explicitly reviewed deployment of code and read scope, including carefully
 limited access to the pinned source archive. No immutable storage format
 or AWS policy is changed by this increment.
+
+## Companion data dictionary
+
+| Field | Meaning |
+| --- | --- |
+| `snapshot_id`, `version` | Exact threat release and independent companion contract version |
+| `record_id`, `checksum` | Stable projection record ID and source archive SHA-256 |
+| `kind`, `operator` | Published coverage, operational presence or registration. Operator is nullable for regulator aggregates. |
+| `country_iso2`, `region` | ISO country and optional source-named administrative area |
+| `reporting_year`, `source_date`, `retrieved_at` | Measurement year, publication date and UTC capture time |
+| `population_coverage`, `scope` | Unit fraction of the population and the regulator's coverage definition |
+| `publication`, `publisher`, `license` | Source provenance and attribution |
+
+The local CRTC capture contributes national and provincial context. Country
+scope filters the API companion. A province filter narrows the source rows
+within that same response. The map displays Natural Earth country geography.
+The ratio is a 2021 population metric and carries no asset-level detail.
+Consult the [source register](source-register.md) for the archived source and
+reproduction command.

@@ -14,13 +14,16 @@ from pydantic import BaseModel, ValidationError
 from starlette.types import ASGIApp
 
 from backend.investigations.contracts import Analytics, Claim, Plan, Request
+from backend.investigations.timing import measure
 from backend.models import (
+    Advisory,
     Coverage,
     Edge,
     Envelope,
     Evidence,
     Exposure,
     Filters,
+    MitigationVulnerability,
     RiskSummary,
     ServiceError,
     Vulnerability,
@@ -53,6 +56,7 @@ class Research(BaseModel):
     geography: Envelope[list[Exposure]]
     proposal: Envelope[Filters] | None = None
     evidence: list[Evidence]
+    mitigation: Advisory | None = None
 
     @property
     def coverage(self) -> list[Coverage]:
@@ -61,6 +65,12 @@ class Research(BaseModel):
 
 def plan_request(request: Request) -> Plan:
     filters = request.filters.model_copy(update={"limit": min(request.filters.limit, MAX_RANKED)})
+    if request.mitigation:
+        return Plan(
+            filters=filters.model_copy(update={"limit": 1}),
+            scope="country" if filters.country_iso2 else "global",
+            mitigation=request.mitigation,
+        )
     if filters.country_iso2:
         return Plan(filters=filters, scope="country")
     if request.scope == "regional" or re.search(
@@ -106,7 +116,8 @@ async def investigate_tools(session: ClientSession, snapshot: UUID, plan: Plan) 
         if name not in TOOLS:
             raise ServiceError("invalid_tool", "tool is outside the investigation allowlist", 500)
         async with slots, asyncio.timeout(8):
-            reply = await session.call_tool(name, args)
+            with measure("mcp." + name):
+                reply = await session.call_tool(name, args)
         if reply.isError:
             raise ServiceError("tool_failure", "an evidence query failed", 503)
         try:
@@ -122,6 +133,47 @@ async def investigate_tools(session: ClientSession, snapshot: UUID, plan: Plan) 
         return value
 
     filters = {"filters": plan.filters.model_dump(mode="json")}
+    if plan.mitigation:
+        context = plan.mitigation
+        # This is an exact CVE advisory lookup independent of geography or cohort eligibility.
+        singleton = Filters(cve_ids=(context.cve_id,), limit=1)
+        geo = await call("get_exposure_by_country", filters, Envelope[list[Exposure]])
+        exact = await call(
+            "get_vulnerabilities",
+            {"filters": singleton.model_dump(mode="json"), "include_mitigation": True},
+            Envelope[list[MitigationVulnerability]],
+        )
+        if len(exact.data) != 1 or exact.data[0].cve_id != context.cve_id:
+            raise ServiceError("invalid_scope", "CVE is outside the selected release", 409)
+        (item,) = exact.data
+        allowed = list(dict.fromkeys(filter(None, (*item.source_refs, item.epss_evidence_id))))
+        if not set(context.evidence_ids) <= set(allowed) or len(allowed) > MAX_EVIDENCE:
+            raise ServiceError("invalid_evidence", "evidence is outside the selected CVE", 409)
+        fetched = []
+        for identifier in allowed:
+            record = (
+                await call("get_evidence", {"evidence_id": identifier}, Envelope[Evidence])
+            ).data
+            if record.evidence_id != identifier:
+                raise ServiceError("invalid_evidence", "evidence ID differs from lookup", 409)
+            fetched.append(record)
+        if item.mitigation and not any(
+            row.evidence_id == item.mitigation.evidence_id
+            and row.source == "cisa"
+            and row.source_record_id == context.cve_id
+            for row in fetched
+        ):
+            raise ServiceError(
+                "invalid_evidence", "catalog guidance lacks matching provenance", 409
+            )
+        return Research(
+            snapshot=snapshot,
+            vulnerabilities=Envelope[list[Vulnerability]].model_validate(exact.model_dump()),
+            geography=geo,
+            evidence=fetched,
+            mitigation=item.mitigation,
+        )
+
     if plan.scope == "unsupported_region":
         geo = await call("get_exposure_by_country", filters, Envelope[list[Exposure]])
         return Research(
@@ -262,7 +314,9 @@ def analytics(research: Research, plan: Plan) -> Analytics:
         risk=research.risk.data
         if research.risk and research.risk.availability == "available"
         else None,
-        ranked_cve_ids=[row.cve_id for row in research.vulnerabilities.data],
+        ranked_cve_ids=[]
+        if plan.mitigation
+        else [row.cve_id for row in research.vulnerabilities.data],
         graph=[
             edge
             for edge in research.graph.data

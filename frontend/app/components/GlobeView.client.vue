@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Exposure } from '../../investigations/events'
-import { countryOutlines, observedCountries, type CountryFeature } from '../composables/cartography'
+import { countryFeatures, countryOutlines, observedCountries, type CountryFeature } from '../composables/cartography'
 
-const props = defineProps<{ observations: Exposure[] }>()
+const props = defineProps<{ observations: Exposure[]; network: string[]; country?: string }>()
 const target = ref<HTMLElement>()
 const unavailable = ref(false)
 let cleanup: (() => void) | undefined
@@ -23,7 +23,7 @@ onMounted(async () => {
       .polygonAltitude(0.008)
       .polygonCapColor(() => '#17333e')
       .polygonSideColor(() => 'rgba(21, 43, 57, 0.25)')
-      .polygonStrokeColor(() => '#375967')
+      .polygonStrokeColor(() => '#526474')
       .polygonsTransitionDuration(0)
       .pointOfView({ lat: 17, lng: -35, altitude: 2.05 }, 0)
     const material = widget.globeMaterial() as { color?: { set(value: string): void } }
@@ -40,10 +40,17 @@ onMounted(async () => {
       widget.width(element.clientWidth).height(element.clientHeight)
     })
     resize.observe(element)
-    const stop = watch(() => props.observations, (rows) => {
+    const stop = watch(() => [props.observations, props.network, props.country] as const, ([rows, countries, country]) => {
       const observed = new Set(observedCountries(rows).map(row => row.id))
-      widget.polygonCapColor((value) => observed.has((value as CountryFeature).id)
-        ? '#34d9b7' : '#17333e')
+      const context = new Set(countryFeatures(countries).map(row => row.id))
+      const selected = country ? countryFeatures([country])[0]?.id : undefined
+      widget.polygonCapColor((value) => {
+        const code = (value as CountryFeature).id
+        return observed.has(code) ? '#ac7330' : context.has(code) ? '#385a74' : '#23323e'
+      }).polygonStrokeColor((value) => {
+        const code = (value as CountryFeature).id
+        return code && code === selected ? '#dbe7f1' : context.has(code) ? '#83a6c0' : '#526474'
+      })
     }, { immediate: true })
     cleanup = () => {
       stop()

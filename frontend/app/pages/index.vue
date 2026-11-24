@@ -4,13 +4,15 @@ import {
   CircleHelp, Database, Filter, Fingerprint, GitFork, Globe2, LayoutDashboard, LockKeyhole,
   LogOut, Menu, RefreshCw, ScanSearch, Shield, X,
 } from '@lucide/vue'
+import type { CveDetail } from '../../investigations/geography'
 import type { Filters } from '../../investigations/events'
 
 const auth = useOperatorAuth()
 const {
   status, error, data, scoreDate, view, filters, report, running, steps,
   investigationError, selectedEvidence, proposalHistory, load, changeFilters, start,
-  cancel, applyProposal, inspect,
+  cancel, applyProposal, inspect, detail, detailLoading, detailError,
+  openDetail, closeDetail, mitigationCve, mitigationCountry,
 } = useDashboard()
 
 const access = ref('')
@@ -85,6 +87,17 @@ function navigate(id: string) {
 }
 function filterCve(id: string) {
   void changeFilters({ ...filters.value, cve_ids: [id] })
+}
+async function mitigate(current: CveDetail) {
+  closeDetail()
+  navigate('investigations')
+  await nextTick()
+  document.getElementById('investigation-title')?.focus()
+  void start('How to mitigate ' + current.vulnerability.cve_id + '?', 'global', current)
+}
+function inspectDetail(id: string) {
+  closeDetail()
+  void inspect(id)
 }
 function openCveEvidence(row: typeof displayedRows.value[number]) {
   if (row.source_refs[0]) void inspect(row.source_refs[0])
@@ -201,8 +214,11 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
           </div>
 
           <div class="feature-grid">
-            <ExposurePanel :observations="data?.geo.data ?? []" :availability="data?.geo.availability ?? 'unavailable'" :active="ready" />
-            <NetworkPanel :edges="data?.graph ?? []" @inspect="inspect" @filter="filterCve" />
+            <ExposurePanel
+              :projection="data?.geo" :observations="data?.geo.data ?? []" :active="ready"
+              :country="filters.country_iso2 || undefined" @detail="openDetail"
+              @country="country => changeFilters({ ...filters, country_iso2: country || null })" />
+            <NetworkPanel :edges="data?.graph ?? []" @inspect="inspect" @filter="filterCve" @detail="openDetail" />
           </div>
           <div class="review-grid">
             <div class="review-main">
@@ -219,7 +235,7 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
                     <thead><tr><th>CVE</th><th>KEV added</th><th>EPSS</th><th>CVSS</th><th>Source</th></tr></thead>
                     <tbody>
                       <tr v-for="row in displayedRows" :key="row.cve_id">
-                        <td><button class="text-button" type="button" @click="filterCve(row.cve_id)">{{ row.cve_id }}</button></td>
+                        <td><button class="text-button" type="button" @click="openDetail(row.cve_id)">{{ row.cve_id }}</button></td>
                         <td>{{ row.kev_added_at }}</td><td>{{ row.epss === null ? '—' : proportion.format(row.epss) }}</td>
                         <td>{{ row.cvss_score ?? '—' }}</td>
                         <td><button v-if="row.source_refs.length" class="text-button" type="button" :aria-label="'Evidence for ' + row.cve_id" @click="openCveEvidence(row)"><ArrowUpRight :size="16" /></button></td>
@@ -232,7 +248,7 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
             </div>
             <InvestigationPanel
 :ready="ready" :running="running" :steps="steps" :report="report"
-                                :proposal="view.proposal" :error="investigationError" :applied="proposalHistory.length"
+                                :mitigation-cve="mitigationCve" :mitigation-country="mitigationCountry" :proposal="view.proposal" :error="investigationError" :applied="proposalHistory.length"
                                 @start="start" @stop="cancel" @apply="applyProposal" @inspect="inspect" />
           </div>
 
@@ -245,7 +261,9 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
             <div class="source-grid">
               <article v-for="item in data?.coverage ?? []" :key="item.source" class="source-item">
                 <div><span class="status-dot" :class="{ amber: item.status !== 'ok' }" /><strong>{{ sourceLabels[item.source] }}</strong></div>
-                <p>{{ item.status }} · {{ numeric.format(item.row_count) }} records</p>
+                <p>
+                  {{ item.status }}<template v-if="item.status !== 'unavailable'"> · {{ numeric.format(item.row_count) }} records</template>
+                </p>
                 <time v-if="item.source_date" :datetime="item.source_date">{{ item.source_date.slice(0, 10) }}</time>
                 <span v-else>Source date unavailable</span>
               </article>
@@ -255,6 +273,9 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
         </template>
       </div>
     </main>
+    <CveDetailDrawer
+      :detail="detail" :loading="detailLoading" :error="detailError" :disabled="running"
+      @close="closeDetail" @inspect="inspectDetail" @mitigate="mitigate" />
     <EvidenceDrawer :item="selectedEvidence" @close="selectedEvidence = undefined" />
   </div>
 </template>
