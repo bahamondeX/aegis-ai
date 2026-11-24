@@ -45,6 +45,8 @@ execution require their own IAM grants. If the project bootstrap is absent, run
 `AEGIS_CDK_EXECUTION_POLICY_ARN`, and run `make cdk-bootstrap`. This uses the project's
 bootstrap stack and qualifier. The execution policy limits KMS creation by project
 tag and the account-level log-group and alias listing actions by region.
+Deployment preserves successfully provisioned resources if CloudFormation encounters
+an error, so a corrected deployment can resume from the failed state.
 
 ```sh
 make synth

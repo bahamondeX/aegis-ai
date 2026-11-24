@@ -119,6 +119,8 @@ def execution_policy(settings: Settings, partition: str) -> dict[str, Any]:
         "CreateSchedule GetSchedule UpdateSchedule DeleteSchedule",
         regional("scheduler", f"schedule/{settings.project}/{settings.project}-feed-refresh"),
     )
+    # AWS checks group-wide DeleteSchedule when deleting even an empty schedule group.
+    allow("scheduler", "DeleteSchedule", regional("scheduler", f"schedule/{settings.project}/*"))
     allow(
         "ssm",
         "GetParameter GetParameters",

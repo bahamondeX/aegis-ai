@@ -3,6 +3,7 @@ from pathlib import Path
 
 from aws_cdk import (
     App,
+    ArnFormat,
     CfnOutput,
     DefaultStackSynthesizer,
     Duration,
@@ -57,12 +58,35 @@ def lake_stack(app: App, settings: Settings) -> Stack:
     Tags.of(stack).add("Environment", "dev")
     Tags.of(stack).add("AegisScope", settings.project)
     prefix = settings.project
+    log_name = f"/aws/lambda/{prefix}-ingest"
     key = kms.Key(
         stack,
         "ProjectKey",
         alias=f"alias/{prefix}-lake",
         enable_key_rotation=True,
         removal_policy=RemovalPolicy.RETAIN,
+    )
+    logs_service = iam.ServicePrincipal(f"logs.{stack.region}.{stack.url_suffix}")
+    log_arn = stack.format_arn(
+        service="logs",
+        resource="log-group",
+        resource_name=log_name,
+        arn_format=ArnFormat.COLON_RESOURCE_NAME,
+    )
+    key.add_to_resource_policy(
+        iam.PolicyStatement(
+            principals=[logs_service],
+            actions=["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*"],
+            resources=["*"],
+            conditions={"ArnEquals": {"kms:EncryptionContext:aws:logs:arn": log_arn}},
+        )
+    )
+    key.add_to_resource_policy(
+        iam.PolicyStatement(
+            principals=[logs_service],
+            actions=["kms:DescribeKey"],
+            resources=["*"],
+        )
     )
     bucket_options = {
         "block_public_access": s3.BlockPublicAccess.BLOCK_ALL,
@@ -121,7 +145,7 @@ def lake_stack(app: App, settings: Settings) -> Stack:
     log_group = logs.LogGroup(
         stack,
         "IngestLogs",
-        log_group_name=f"/aws/lambda/{prefix}-ingest",
+        log_group_name=log_name,
         retention=logs.RetentionDays.ONE_WEEK,
         encryption_key=key,
         removal_policy=RemovalPolicy.DESTROY,

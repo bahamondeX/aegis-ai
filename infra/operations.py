@@ -110,6 +110,7 @@ def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) 
             settings.stack,
             "--require-approval",
             "never",
+            "--no-rollback",
             "--toolkit-stack-name",
             settings.bootstrap_stack,
         ]

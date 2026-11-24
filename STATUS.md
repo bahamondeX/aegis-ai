@@ -238,3 +238,40 @@ Python dotenv parsing with an allowlist and explicit process overrides.
 Evidence is under `data/evidence/g2-dotenv/`. AWS writes are scoped to the
 approved deployment. G2 remains in progress. The next steps are project
 bootstrap, the lake stack deployment, and cloud data verification.
+
+## 2026-11-24T01:13:29Z — Initial cloud deployment failed and recovery prepared
+
+- `make cdk-bootstrap` exited 0 in 79.39 s. The tagged project bootstrap
+  stack `aegis-dev-bootstrap` reached `CREATE_COMPLETE`. A subsequent
+  `make aws-preflight` exited 0 in 3.32 s and reported bootstrap version 34.
+- `make deploy` exited 2 after 367.00 s. The ARM64 image was built and published
+  to the dedicated ECR repository with digest
+  `sha256:741122f181664c6a22c83f6aa74a91bad7258d7d37e981f619d6e55a993dee93`.
+  CloudFormation could not associate the KMS key with the ingestion log group.
+  Automatic rollback then failed because Scheduler required `DeleteSchedule`
+  scoped to the schedule group even though it was empty. See `deploy-a.log`.
+- AWS confirmed `aegis-dev-lake` is in `ROLLBACK_FAILED`. The surviving Scheduler
+  group contains zero schedules, the retained Glue database contains zero
+  tables, and the KMS key was retained. Cloud ingestion and Athena verification
+  have yet to run.
+- Added an explicit regional CloudWatch Logs grant scoped to the ingestion log
+  group's encryption context. Updated the IAM policy to allow `DeleteSchedule`
+  within the project group only. IAM Access Analyzer reported zero errors for
+  policy version `v3`. Future CDK deployments preserve successful resources
+  on failure.
+- `make lint`, `make typecheck`, `make verify-phase1`, `make synth`, and
+  `make diff` returned 0 after the corrections. The replay passed 29 tests
+  in 6.83 s. Evidence is in the `*-recovery.log` files under
+  `data/evidence/g2-dotenv/`.
+- The read-only recovery inspection verified the retained resources are
+  importable by Glue database name and KMS key ID. The prepared recovery
+  script rejected execution without separate approval. Recovery would remove
+  the failed stack and its empty scheduler group, then reattach the existing
+  Glue database and KMS key before retrying deployment.
+
+**G2 remains BLOCKED** pending explicit approval for failed-stack recovery.
+Preserve the bootstrap stack, Glue database, and KMS key. With approval, complete
+the guarded recovery, deploy with scheduling disabled, verify bootstrap and
+Iceberg idempotence, publish the pinned snapshot twice, perform manual ingestion,
+enable the scheduler, and verify both the pinned and latest Athena releases.
+G3 local implementation follows G2 acceptance.
