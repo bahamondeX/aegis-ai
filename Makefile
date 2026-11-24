@@ -95,3 +95,7 @@ build-ui-static:
 	$(RUN) python -m scripts.build_static_ui
 smoke-ui-static:
 	$(RUN) python -m scripts.smoke_static_ui
+
+.PHONY: eval-g7
+eval-g7:
+	@$(RUN) python -m scripts.evaluate_release

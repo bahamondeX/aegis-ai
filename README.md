@@ -1,8 +1,9 @@
 # AEGIS AI
 
-AEGIS G1 is a local vulnerability intelligence pipeline. It captures CISA KEV and FIRST
-EPSS, enriches up to 20 KEV CVEs per run from NVD, and publishes evidence-backed Parquet and
-DuckDB views. The default query command prints aggregate results.
+AEGIS is an evidence-backed vulnerability intelligence workspace. It captures CISA KEV and
+FIRST EPSS, enriches up to 20 KEV CVEs per run from NVD, and serves pinned releases through
+DuckDB locally and Athena in AWS. The Nuxt 4 workspace combines source coverage,
+relationships, geographic context and authenticated investigations.
 
 ## Quickstart
 
@@ -199,3 +200,43 @@ The [G4 and AgentCore runbook](docs/g4-investigations.md) describes the
 authorized Cognito and runtime configuration. [STATUS.md](STATUS.md) links
 the observed browser check outputs and screenshots. Cloud hosting and a
 standalone cloud API are separate deployment work.
+
+## Geography and mitigation extension
+
+The globe and tactical map open worldwide and offer separate network context
+and CVE evidence layers. The pinned local companion includes historical
+Canadian regulator coverage, with published provincial and territorial
+values. Peru and other uncovered areas report unavailable. Current CVE
+exposure is unavailable across the release. Measured zero requires a
+qualified source and time window. Private site and SOC incident layers are
+disabled. [Source register](docs/source-register.md) ·
+[Data and API contracts](docs/geography-contract.md)
+
+Open a CVE from the graph or ranked list to review version criteria, CVSS,
+EPSS and source evidence. **How to mitigate** opens an authenticated
+investigation on the selected release and scope. **Request help** opens an
+editable SOC/CSIRT draft for operator review. It sends no messages or tickets.
+An explicitly selected CVE stays accessible from its filter chip in areas
+without geographic evidence.
+
+```sh
+make build-ui
+make smoke-ui-extension
+make eval-g7
+```
+
+Stage the optional regulator companion using the documented source command
+before running the complete browser suite. The browser harness captures
+actual production-mode UI under `data/evidence/g5-extension/`.
+[World view](data/evidence/g5-extension/world-layers.png) ·
+[Tactical map](data/evidence/g5-extension/tactical.png) ·
+[Mitigation handoff](data/evidence/g5-extension/soc-handoff.png) ·
+[Mobile view](data/evidence/g5-extension/mobile.png).
+[Evaluation matrix](docs/evaluation.md) · [Execution evidence](STATUS.md)
+
+## Hosted pilot preparation
+
+The existing AgentCore and Cognito resources have verified baseline evidence.
+The separate hosting stack and static build are prepared locally. The hosted
+UI and standalone cloud API require separate approval and an authenticated
+cloud smoke before G6 and final G7 close. [Hosting runbook](docs/hosting.md)

@@ -646,3 +646,41 @@ for inputs, authorization, authenticated cloud smoke and rollback scope.
 No new AWS writes, billable queries or model invocations were made.
 The managed CloudFront/API Gateway/Lambda transport, callback update and
 authenticated hosted smoke remain pending separately scoped approval.
+
+## 2026-11-24T05:28:00Z — G7 available local evaluation PASS, final gate PENDING
+
+G5 extension `4d8c092`. G6 local hosting preparation `3f8b7b8`. The
+E01–E17 matrix in `docs/evaluation.md` separates current local checks,
+previous live Bedrock and AgentCore evidence, conditional-source scenarios,
+and the hosted gate. No additional model runs or paid Athena statements
+were initiated. AWS MCP read-only checks confirmed the existing AgentCore
+stack `CREATE_COMPLETE`, runtime and DEFAULT endpoint `READY`, JWT
+authorizer configured, and lifecycle 60 s idle / 120 s maximum.
+`data/evidence/continuation/runtime-control-plane.json`.
+
+| Command | Exit | Actual result |
+| --- | ---: | --- |
+| `make lint typecheck test verify-phase1 smoke-local smoke-investigation smoke-agent-local` | 0 each | 63 Python tests and deterministic real snapshot replay. Added the mitigation source-instruction isolation check and the pinned Athena CISA guidance query check. Auth, parity renderer, API/MCP, replay and active cancellation verified. `regression-final.log`. |
+| `make lint-ui typecheck-ui build-ui`, `sh scripts/frontend.sh test`, `sh scripts/frontend.sh audit` | 0 each | Strict build, four frontend contract tests and no known vulnerabilities reported by the registry audit. `ui-acceptance.log`, `ui-unit-acceptance.log`, `ui-audit.log`. |
+| `make smoke-ui-extension` and `python -m scripts.verify_frontend_stream` | 0 each | Three Chromium cases in 34.7 s. The Canada-scoped CVE remained accessible from the active filter, with scope preserved through SSE and the editable handoff. The compiled SSE client read 10 events, 18.64 ms first event and 804.19 ms to completion. `browser-acceptance.log`, `stream-client.log`. |
+| `make build-ui-static smoke-ui-static` | 0 each | Latest static artifact compiled with the verified public OIDC configuration. One real Chromium check passed in 2.7 s. `static-acceptance.log`. |
+| `make eval-g7` | 0 | Seven scenarios. 22 supported of 22 factual claims, 100% grounding. Two correct claim-free responses are outside this denominator. Zero fabricated observations and no private disclosure observed in exercised paths. No billable inference, so no tokens consumed. `grounding-acceptance.json`, `timing-acceptance.log`. |
+| `python -m scripts.verify_g3_athena --extension` | 1 (expected refusal) | The extension could not confirm remaining Lakehouse allowance. The guard prevented execution. `athena-extension-guard.log`. Prior same-release Athena evidence remains six cases, seven queries and 10,210,468 scanned bytes. |
+
+The real local assessment used CISA capture content, dated FIRST EPSS
+values and pinned NVD metrics and checksums. First event 4.96–7.23 ms and
+completion 109.27–446.22 ms over seven cases. Mitigation completion
+291.43–325.46 ms over four cases. Median component spans were 23.20 ms
+for 32 DuckDB reads, 36.33 ms for 37 MCP calls and 1.62 ms for 68 SQLite
+checkpoint updates. Previous live Bedrock and runtime timing/token figures
+are retained with their original dates and environments. Cold starts and
+new remote per-component latency remain unmeasured.
+
+Next action is to reconcile remaining G2 and inference allowances and
+obtain separate authorization for the hosted UI, cloud API, exact
+Cognito callback and scoped AgentCore revision. Then run new Athena detail
+parity, live mitigation inference and authenticated hosted end-to-end SSE.
+Conditional aggregate exposure and optional private site and SOC incident
+positive tests remain unavailable. The updated IMPLEMENTATION_PLAN.md
+remains the user's original working-tree edit with its acceptance criteria
+intact. The root .env remains ignored at mode 600.

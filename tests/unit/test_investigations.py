@@ -409,3 +409,45 @@ def test_s3_checkpoint_requires_configured_key_and_conditional_writes() -> None:
         with pytest.raises(ServiceError, match="invalid checkpoint"):
             store.get("synthetic")
         stub.assert_no_pending_responses()
+
+
+def test_mitigation_source_text_does_not_reach_model_or_planner_checkpoint(
+    findings: Research, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from backend.models import Advisory
+
+    findings.mitigation = Advisory(source="cisa", evidence_id=KEV_ID, text=RAW)
+    monkeypatch.setattr(
+        "backend.investigations.graph.investigate_tools", AsyncMock(return_value=findings)
+    )
+    select = AsyncMock(
+        return_value=Preference(
+            selection=ModelSelection(keys=[f"{CVE}/kev"]),
+            usage=Usage(model_id="synthetic-model", attempts=1, latency_ms=0),
+        )
+    )
+    checkpoint = AsyncMock()
+    request = Request.model_validate(
+        {
+            "question": RAW,
+            "snapshot_id": findings.snapshot,
+            "filters": {"cve_ids": [CVE], "country_iso2": "PE"},
+            "mitigation": {"cve_id": CVE, "evidence_ids": [KEV_ID]},
+        }
+    )
+    report, analytics, proposal = asyncio.run(
+        execute(
+            {"snapshot_id": findings.snapshot, "request": request, "revision_count": 0},
+            cast(ClientSession, object()),
+            select,
+            AsyncMock(),
+            checkpoint,
+        )
+    )
+    select.assert_awaited_once()
+    assert RAW not in str(select.call_args_list + checkpoint.call_args_list)
+    assert report.analysis_mode == "bedrock" and len(report.claims) == 2
+    assert report.claims[1].key == f"{CVE}/mitigation"
+    assert report.claims[1].evidence_ids == [KEV_ID]
+    assert analytics.geography == "unavailable" and not analytics.ranked_cve_ids
+    assert proposal is None

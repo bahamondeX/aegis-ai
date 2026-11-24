@@ -187,7 +187,13 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
           <div class="scope-bar">
             <div class="scope-label"><Filter :size="16" aria-hidden="true" /><span>Active scope</span></div>
             <div class="scope-chips">
-              <span v-for="chip in activeChips" :key="chip">{{ chip }}</span>
+              <template v-for="chip in activeChips" :key="chip">
+                <button
+                  v-if="chip.startsWith('CVE-')" class="cve-scope-chip"
+                  type="button" :aria-label="'Open CVE detail for ' + chip" @click="openDetail(chip)"
+                >{{ chip }}</button>
+                <span v-else>{{ chip }}</span>
+              </template>
               <span v-if="!activeChips.length">All ranked vulnerabilities</span>
             </div>
             <button class="scope-toggle" type="button" :aria-expanded="filterPopover" @click="filterPopover = !filterPopover">Filters <ChevronDown :size="15" /></button>

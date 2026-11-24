@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 
 from backend.models import (
@@ -53,7 +54,7 @@ def guidance(reader: "SnapshotReader", cve: str, identifier: str) -> Advisory | 
             ),
             None,
         )
-    except (OSError, DataError, ValidationError) as error:
+    except (OSError, DataError, ValidationError, BotoCoreError, ClientError) as error:
         raise ServiceError(
             "archive_unavailable", "unable to verify archived guidance", 503
         ) from error

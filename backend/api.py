@@ -30,6 +30,7 @@ from backend.models import (
     Evidence,
     EvidenceId,
     Exposure,
+    FilterCve,
     Filters,
     MitigationVulnerability,
     RiskSummary,
@@ -37,7 +38,6 @@ from backend.models import (
     Vulnerability,
 )
 from backend.reader import SnapshotReader
-from schemas.sources import CveId
 
 FilterQuery = Annotated[Filters, Query()]
 Token = Annotated[HTTPAuthorizationCredentials | None, Security(HTTPBearer(auto_error=False))]
@@ -177,7 +177,7 @@ def create_app(
 
     @routes.get("/cves/{cve_id}")
     def cve_detail(
-        cve_id: CveId, snapshot_id: UUID, country_iso2: Country | None = None
+        cve_id: FilterCve, snapshot_id: UUID, country_iso2: Country | None = None
     ) -> CveDetail:
         return detail(reader, cve_id, snapshot_id, country_iso2)
 

@@ -270,13 +270,16 @@ export function useDashboard() {
       selectedEvidence.value = evidenceIndex.value[id]
       return
     }
+    const token = auth.token.value
+    if (!token) return
     try {
       const evidence = await request<Envelope<Evidence>>('v1/evidence/' + id)
+      if (token !== auth.token.value) return
       if (evidence.snapshot_id !== view.value.snapshot) throw new Error('Evidence snapshot changed.')
       evidenceIndex.value = { ...evidenceIndex.value, [id]: evidence.data }
       selectedEvidence.value = evidence.data
     } catch {
-      error.value = 'Evidence could not be read from the active snapshot.'
+      if (token === auth.token.value) error.value = 'Evidence could not be read from the active snapshot.'
     }
   }
 

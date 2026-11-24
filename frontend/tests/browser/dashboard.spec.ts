@@ -156,6 +156,13 @@ test('world and country context stay independent as a CVE moves from graph to an
   await expect(dialog.getByText('No qualified CVE exposure source', { exact: false })).toBeVisible()
   await expect(dialog.getByRole('button', { name: /^CISA/ })).toBeVisible()
   await page.screenshot({ path: join(evidence, 'cve-detail.png') })
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: 'Filter workspace to CVE' }).click()
+  await country.selectOption('CA')
+  await expect(map.getByText('Canadian Radio-television and Telecommunications Commission')).toBeVisible()
+  await expect(page.getByText('No ranked vulnerabilities match the active scope.')).toBeVisible()
+  await page.getByRole('button', { name: 'Open CVE detail for ' + cve }).click()
+  await expect(dialog.getByText('Geographic evidence · CA')).toBeVisible()
 
   const stream = page.waitForResponse(response =>
     response.url().endsWith('/api/aegis/v1/investigations') && response.request().method() === 'POST',
@@ -165,6 +172,7 @@ test('world and country context stay independent as a CVE moves from graph to an
   expect(response.headers()['content-type']).toContain('text/event-stream')
   const payload = response.request().postDataJSON()
   expect(payload.filters.cve_ids).toEqual([cve])
+  expect(payload.filters.country_iso2).toBe('CA')
   expect(payload.mitigation.evidence_ids.length).toBeGreaterThan(0)
   const report = page.getByRole('article', { name: 'Investigation report' })
   await expect(report).toContainText('CISA KEV required action')

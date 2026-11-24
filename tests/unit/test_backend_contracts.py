@@ -97,3 +97,26 @@ def test_cognito_access_tokens_require_client_expiry_and_workspace(monkeypatch) 
         with pytest.raises(ServiceError) as error:
             authenticate(patch)
         assert error.value.status == status
+
+
+def test_cisa_guidance_query_is_pinned_and_bound_in_athena() -> None:
+    from backend.cve_detail import guidance
+
+    release = Published(
+        run_id=uuid4(), score_date=date(2026, 1, 1), snapshots=dict.fromkeys(TABLES, 42)
+    )
+
+    class CapturingReader:
+        database = "aegis_unit"
+
+        def _select(self, sql: str, *, max_rows: int):
+            assert 'FROM "aegis_unit"."evidence" FOR VERSION AS OF 42' in sql
+            assert f"evidence_id='{('a' * 64)}'" in sql
+            assert "source='cisa' AND source_record_id='CVE-2026-1234' LIMIT 1" in sql
+            assert max_rows == 1 and "?" not in sql
+            return [], {}
+
+    reader = SnapshotReader.cloud(
+        CapturingReader(), release, geo_available=False, cisa_archive=lambda: b""
+    )
+    assert guidance(reader, "CVE-2026-1234", "a" * 64) is None
