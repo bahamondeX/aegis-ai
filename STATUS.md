@@ -1221,3 +1221,24 @@ reported maximum memory 296 MB. The full-window dispatcher is running
 with four concurrent Lambda calls and immutable attempt reservations.
 The rollout added no scheduler. Evidence is in
 `data/evidence/v2-activation/history-{plan,change-set,first-eight,full}.*`.
+
+## 2026-11-24T14:27Z — Full source-capture vulnerability index staged
+
+`uv run --locked --no-sync python -m scripts.v2_catalog_silver --inventory 89d66cb53b19c5cf1eac731e045c0cd3dddc4e194c385ffb2e65f45636c89872 --evidence data/evidence/v2-activation`
+exited 0 after writing 29 source captures to Iceberg v2
+`aegis_dev.fact_cve_source_capture` at snapshot `2166277719915190789`.
+Runtime was 236.35 s with 459,161,600 bytes peak local RSS. The tool can
+read one versioned Bronze artifact at a time. A checksum-matching local
+cache avoided additional artifact transfers in this run.
+
+| Source | Valid capture records | Distinct CVEs |
+| --- | ---: | ---: |
+| CISA KEV | 1,792 | 1,792 |
+| CVE Program | 431,604 | 431,119 |
+| NVD | 440,131 | 431,114 |
+
+Athena and DuckDB agree on each count and on 431,133 distinct CVEs across
+all three sources. The two Athena statements scanned 2,090,649 bytes each
+in 2,290 ms and 1,231 ms. Source capture evidence remains separately
+addressable. This index does not activate a production profile or ranking.
+See `data/evidence/v2-activation/v2-catalog-silver.json`.
