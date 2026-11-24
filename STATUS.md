@@ -214,3 +214,27 @@ the invalid action as expected. See `linux-icu-entrypoint.log` and
 
 The local G2 checks are complete. The last fully verified gate remains G1 while
 AWS deployment and live G2 verification await the approved project settings.
+
+## 2026-11-24T01:02:09Z — G2 resumed with authorization
+
+The root `.env` contained an approval matching the explicit account ending in
+`6271`, region `us-east-1`, prefix `aegis-dev`, profile `default`, and USD 15
+ceiling. The file was mode 600 and ignored by Git. Added the local artifact path
+and later the verified scoped bootstrap policy ARN while preserving existing
+file bytes and the values of all prior entries. The Make CLI targets now use
+Python dotenv parsing with an allowlist and explicit process overrides.
+
+| Check | Exit | Observation |
+|---|---:|---|
+| `make aws-preflight` | 2 | The Botocore login credential provider required CRT. |
+| `make aws-preflight` after adding the Boto3 CRT extra to the infra group | 0 | Terminal STS matched the configured account. 356 Lambda concurrency slots were unreserved. The project bootstrap was absent. |
+| `env AEGIS_AWS_ACCOUNT=000000000001 make aws-preflight` | 2 | Live STS mismatch stopped preflight. |
+| `env AEGIS_DEPLOY_APPROVAL= make deploy` | 2 | The approval guard stopped deployment. |
+| `env AEGIS_BUDGET_USD=0 make deploy` | 2 | The budget guard stopped deployment. |
+| `make lint`, `make typecheck`, `make verify-phase1` | 0 | 29 tests passed and the pinned snapshot replay matched the published fingerprints and query results. |
+| `make synth`, `make diff` | 0 | Project-scoped synthesis and live diff completed. |
+| `make prepare-bootstrap-policy` | 0 | Created the scoped policy in `/aegis/aegis-dev/`. IAM Access Analyzer flagged an invalid S3 action in the initial document. Removed it from the project policy before attachment, revalidated with zero IAM errors, and reran the target successfully. |
+
+Evidence is under `data/evidence/g2-dotenv/`. AWS writes are scoped to the
+approved deployment. G2 remains in progress. The next steps are project
+bootstrap, the lake stack deployment, and cloud data verification.

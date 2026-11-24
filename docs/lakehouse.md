@@ -24,7 +24,9 @@ AWS deployment, live Athena parity and a verified schedule.
 ## Authorized AWS run
 
 Use an existing AWS profile with the explicitly confirmed account and region.
-Set these non-secret values in the calling shell after receiving authorization.
+Record the approved values in the root `.env` using `.env.example` as a template.
+Keep `.env` at mode 600. Project commands read these fields automatically and an
+explicit process value takes precedence.
 
 | Variable | Value |
 |---|---|
@@ -33,29 +35,33 @@ Set these non-secret values in the calling shell after receiving authorization.
 | `AEGIS_DEPLOY_APPROVAL` | The approved account, region and prefix joined with slashes |
 | `AEGIS_BUDGET_USD` | The approved USD amount |
 | `AEGIS_SCHEDULE_ENABLED` | `0` for the first deployment, `1` after the first manual ingest succeeds |
+| `AEGIS_SNAPSHOT` | The verified local run UUID used for seeding and pinned verification |
 
 Run `make aws-preflight`. It verifies STS, available Lambda concurrency and the CDK
 bootstrap parameter. Deployment calls also check the stack ownership tags. Permission
 to describe an environment establishes read access. Asset publishing and CloudFormation
-execution require their own IAM grants. If bootstrap is absent, use an approved account
-deployment policy as `AEGIS_CDK_EXECUTION_POLICY_ARN` and run `make cdk-bootstrap` only
-within the authorized environment. Reuse an approved bootstrap if it already exists.
+execution require their own IAM grants. If the project bootstrap is absent, run
+`make prepare-bootstrap-policy`, record the approved project policy ARN in
+`AEGIS_CDK_EXECUTION_POLICY_ARN`, and run `make cdk-bootstrap`. This uses the project's
+bootstrap stack and qualifier. The execution policy limits KMS creation by project
+tag and the account-level log-group and alias listing actions by region.
 
 ```sh
 make synth
 make diff
-AEGIS_SCHEDULE_ENABLED=0 make deploy
+make deploy
 make init-tables
 make init-tables
 # Optional source credentials from the mode-600 .env or process environment.
 make secrets-sync
-make publish-local SNAPSHOT="$AEGIS_SNAPSHOT"
-make publish-local SNAPSHOT="$AEGIS_SNAPSHOT"
+make publish-local
+make publish-local
 make ingest-cloud
-AEGIS_SCHEDULE_ENABLED=1 make diff
-AEGIS_SCHEDULE_ENABLED=1 make deploy
-make verify-cloud SNAPSHOT="$AEGIS_SNAPSHOT"
+# Set AEGIS_SCHEDULE_ENABLED=1 in the root .env before these commands.
+make diff
+make deploy
 make verify-cloud
+make verify-cloud LATEST=1
 ```
 
 Set `AEGIS_SNAPSHOT` to the verified local run UUID before running these commands.
@@ -111,10 +117,10 @@ an authorization ceiling and billing still depends on usage.
 [EventBridge](https://aws.amazon.com/eventbridge/pricing/) ·
 [Glue](https://aws.amazon.com/glue/pricing/)
 
-With separate explicit teardown authorization, set `AEGIS_DESTROY_APPROVAL` to the
-project stack name and run `make destroy`. It removes the project stack's compute,
+With separate explicit teardown authorization, set `AEGIS_DESTROY_APPROVAL` in
+`.env` to the project stack name and run `make destroy`. It removes the project's compute,
 schedule and workgroup and retains the encrypted buckets, TLS policies, KMS key,
-and Glue database. The SecureStrings and shared bootstrap resources are outside
+and Glue database. The SecureStrings and dedicated bootstrap resources are outside
 the project stack. Record retained IDs before teardown. Retained resources can
 continue to incur charges. Purging data, secrets or bootstrap resources requires
 separate authorization because it can permanently remove evidence or affect other

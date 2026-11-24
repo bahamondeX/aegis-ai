@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from pipelines.config import configured_snapshot, project_environment
 from pipelines.io import DataError, selected_snapshot
 from pipelines.publish import ingest, validate_published, verify_replay
 from pipelines.query import Query, connect, query
@@ -24,7 +25,7 @@ def report(event: str, **fields: Any) -> None:
 
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="AEGIS local data pipeline")
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--data-dir", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
     capture = commands.add_parser("ingest")
     capture.add_argument("--env-file", type=Path, default=Path(".env"))
@@ -44,14 +45,15 @@ def run_tests(root: Path, folder: Path) -> int:
 
 def main() -> int:
     args = arguments()
-    root = args.data_dir.resolve()
     try:
+        environment = project_environment()
+        root = (args.data_dir or Path(environment.get("AEGIS_DATA_DIR") or "data")).resolve()
         if args.command == "ingest":
             folder, manifest = ingest(root, args.env_file, args.nvd_limit)
             report("ingest", artifact=folder / "manifest.json", **manifest)
             return 0 if manifest["status"] == "ok" else 2
 
-        folder = selected_snapshot(root, args.snapshot)
+        folder = selected_snapshot(root, args.snapshot or configured_snapshot(environment))
         if args.command == "test":
             return run_tests(root, folder)
 

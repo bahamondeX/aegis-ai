@@ -2,6 +2,7 @@
 
 import io
 from datetime import UTC, date, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import boto3
@@ -12,6 +13,7 @@ from botocore.stub import Stubber
 from infra.settings import Settings
 from pipelines.athena import AthenaReader, render, value_for
 from pipelines.cloud import Published, SnapshotStore
+from pipelines.config import configured_snapshot, project_environment
 from pipelines.io import DataError, digest
 from pipelines.query import Query
 from schemas.tables import TABLES
@@ -23,16 +25,67 @@ def test_cloud_writer_needs_target_and_explicit_budget(monkeypatch: pytest.Monke
     monkeypatch.setenv("AEGIS_AWS_REGION", "us-east-1")
     monkeypatch.setenv("AEGIS_AWS_PROFILE", "unit-test")
     monkeypatch.setenv("AEGIS_PROJECT_PREFIX", "aegis-unit")
-    monkeypatch.delenv("AEGIS_DEPLOY_APPROVAL", raising=False)
-    settings = Settings.load()
+    monkeypatch.setenv("AEGIS_DEPLOY_APPROVAL", "")
     with pytest.raises(DataError, match="explicit AEGIS_DEPLOY_APPROVAL"):
-        settings.authorize()
+        Settings.load().authorize()
     monkeypatch.setenv("AEGIS_DEPLOY_APPROVAL", f"{account}/us-east-1/aegis-unit")
     monkeypatch.setenv("AEGIS_BUDGET_USD", "NaN")
     with pytest.raises(DataError, match="finite and positive"):
-        settings.authorize()
+        Settings.load().authorize()
     monkeypatch.setenv("AEGIS_BUDGET_USD", "5")
-    assert settings.authorize() == 5
+    assert Settings.load().authorize() == 5
+
+
+def test_dotenv_is_literal_allowlisted_and_uses_environment_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / ".env"
+    marker = tmp_path / "unexpected"
+    snapshot = uuid4()
+    path.write_text(
+        "AEGIS_AWS_ACCOUNT=123456789012\nAEGIS_AWS_REGION=us-east-1\n"
+        "AEGIS_AWS_PROFILE=test-profile\nAEGIS_PROJECT_PREFIX=aegis-unit\n"
+        "AEGIS_DEPLOY_APPROVAL=123456789012/us-east-1/aegis-unit\nAEGIS_BUDGET_USD=15\n"
+        "AEGIS_SCHEDULE_ENABLED=0\nSHODAN_API_KEY=synthetic-test-only\n"
+        f'AEGIS_SNAPSHOT={snapshot}\nAEGIS_DATA_DIR="$(touch {marker})"\n'
+    )
+    path.chmod(0o600)
+    monkeypatch.delenv("AEGIS_DATA_DIR", raising=False)
+    monkeypatch.delenv("AEGIS_SNAPSHOT", raising=False)
+    monkeypatch.setenv("AEGIS_SCHEDULE_ENABLED", "1")
+    configuration = project_environment(path)
+    settings = Settings.load(environment=configuration)
+    assert settings.profile == "test-profile"
+    assert settings.schedule_enabled
+    assert settings.authorize() == 15
+    assert configured_snapshot(configuration) == snapshot
+    assert configuration["AEGIS_DATA_DIR"] == f"$(touch {marker})"
+    assert "SHODAN_API_KEY" not in configuration
+    assert not marker.exists()
+    path.chmod(0o644)
+    with pytest.raises(DataError, match="permissions 600"):
+        project_environment(path)
+
+
+def test_sts_account_mismatch_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings("123456789012", "us-east-1", "test-profile", "aegis-unit", False)
+    session = boto3.Session(
+        aws_access_key_id="stub", aws_secret_access_key="stub", region_name="us-east-1"
+    )
+    client = session.client("sts")
+    monkeypatch.setattr(session, "client", lambda service, config: client)
+
+    def selected_profile(profile_name: str, region_name: str) -> boto3.Session:
+        assert profile_name == "test-profile"
+        assert region_name == "us-east-1"
+        return session
+
+    monkeypatch.setattr("infra.settings.boto3.Session", selected_profile)
+    with Stubber(client) as aws:
+        aws.add_response("get_caller_identity", {"Account": "123456789013"}, {})
+        with pytest.raises(DataError, match="STS account does not match"):
+            settings.identity()
+        aws.assert_no_pending_responses()
 
 
 def test_athena_snapshot_literals_and_provider_result_values() -> None:

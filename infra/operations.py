@@ -16,22 +16,24 @@ from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 from pyiceberg.catalog.glue import GlueCatalog
 
+from infra.bootstrap_policy import prepare_policy
 from infra.settings import SCAN_CUTOFF, SDK_CONFIG, SECRET_KEYS, Settings
 from pipelines.athena import AthenaReader
 from pipelines.cli import report
 from pipelines.cloud import LATEST, Published, SnapshotStore
+from pipelines.config import ROOT, configured_snapshot, project_environment
 from pipelines.fetch import credentials
 from pipelines.io import DataError, selected_snapshot, write_json
 from pipelines.lakehouse import init_tables
 from pipelines.publish import history_files, load_run, validate_published
 from pipelines.query import Query, connect, create_views, query
 
-ROOT = Path(__file__).resolve().parents[1]
 CDK = ["npm", "exec", "--yes", "--package=aws-cdk@2.1149.0", "--", "cdk"]
 APP = "uv run --locked --no-sync python -m infra.lake_stack"
 CLOUD_WRITES = {
     "deploy",
     "cdk-bootstrap",
+    "prepare-bootstrap-policy",
     "secrets-sync",
     "init-tables",
     "publish-local",
@@ -44,6 +46,11 @@ CLOUD_WRITES = {
 def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) -> int:
     env = {
         **os.environ,
+        "AEGIS_AWS_ACCOUNT": settings.account,
+        "AEGIS_AWS_REGION": settings.region,
+        "AEGIS_AWS_PROFILE": settings.profile,
+        "AEGIS_PROJECT_PREFIX": settings.project,
+        "AEGIS_SCHEDULE_ENABLED": str(int(settings.schedule_enabled)),
         "AEGIS_CDK_OFFLINE": str(int(offline)),
         "CDK_DISABLE_VERSION_CHECK": "1",
         "JSII_RUNTIME_PACKAGE_CACHE": os.getenv("JSII_RUNTIME_PACKAGE_CACHE", "disabled"),
@@ -67,7 +74,7 @@ def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) 
         )
         args += ["--profile", settings.profile]
     if command == "bootstrap":
-        policy = os.getenv("AEGIS_CDK_EXECUTION_POLICY_ARN", "")
+        policy = settings.execution_policy_arn
         valid_prefixes = (
             f"arn:aws:iam::{settings.account}:policy/",
             f"arn:aws-us-gov:iam::{settings.account}:policy/",
@@ -77,8 +84,18 @@ def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) 
             raise DataError("set AEGIS_CDK_EXECUTION_POLICY_ARN to the scoped deployment policy")
         args += [
             f"aws://{settings.account}/{settings.region}",
+            "--qualifier",
+            settings.bootstrap_qualifier,
+            "--toolkit-stack-name",
+            settings.bootstrap_stack,
             "--cloudformation-execution-policies",
             policy,
+            "--tags",
+            "Project=AEGIS",
+            "--tags",
+            "Environment=dev",
+            "--tags",
+            f"AegisScope={settings.project}",
         ]
     elif command == "diff":
         args += ["--method", "template"]
@@ -89,7 +106,13 @@ def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) 
             args += ["--template", str(baseline)]
         args += [settings.stack]
     elif command == "deploy":
-        args += [settings.stack, "--require-approval", "never"]
+        args += [
+            settings.stack,
+            "--require-approval",
+            "never",
+            "--toolkit-stack-name",
+            settings.bootstrap_stack,
+        ]
     elif command == "destroy":
         args += [settings.stack, "--force"]
     else:
@@ -119,10 +142,12 @@ def check_stack_owner(stack: dict) -> None:
         raise DataError("existing stack does not carry the project's required ownership tags")
 
 
-def check_deploy_target(session: boto3.Session, settings: Settings) -> None:
+def check_deploy_target(
+    session: boto3.Session, settings: Settings, *, stack_name: str | None = None
+) -> None:
     try:
         stacks = session.client("cloudformation", config=SDK_CONFIG).describe_stacks(
-            StackName=settings.stack
+            StackName=stack_name or settings.stack
         )["Stacks"]
     except ClientError as error:
         if (
@@ -141,7 +166,9 @@ def preflight(session: boto3.Session, settings: Settings) -> None:
         raise DataError("insufficient Lambda concurrency for one reserved execution")
     ssm = session.client("ssm", config=SDK_CONFIG)
     try:
-        bootstrap = ssm.get_parameter(Name="/cdk-bootstrap/hnb659fds/version")["Parameter"]
+        bootstrap = ssm.get_parameter(
+            Name=f"/cdk-bootstrap/{settings.bootstrap_qualifier}/version"
+        )["Parameter"]
         bootstrap_version = bootstrap["Value"]
     except ssm.exceptions.ParameterNotFound:
         bootstrap_version = "absent"
@@ -326,23 +353,30 @@ def verify(
     report("cloud.verified", origin=origin, **release.model_dump(mode="json"))
 
 
-def run(command: str, root: Path, snapshot: UUID | None) -> int:
+def run(command: str, root: Path, snapshot: UUID | None, environment: dict[str, str]) -> int:
     offline = command in ("synth", "diff-local")
-    settings = Settings.load(offline=offline)
+    settings = Settings.load(offline=offline, environment=environment)
     if offline:
         return cdk(settings, "diff" if command == "diff-local" else command, root, offline=True)
     if command in CLOUD_WRITES:
         budget = settings.authorize()
         report("aws.budget.approved", ceiling_usd=str(budget))
-    if command == "destroy" and os.getenv("AEGIS_DESTROY_APPROVAL") != settings.stack:
+    if command == "destroy" and settings.destroy_approval != settings.stack:
         raise DataError("explicit AEGIS_DESTROY_APPROVAL for the project stack is required")
-    session, _ = settings.identity()
+    session, principal = settings.identity()
     if command == "aws-preflight":
         preflight(session, settings)
+        return 0
+    if command == "prepare-bootstrap-policy":
+        partition = principal.split(":", 2)[1]
+        arn = prepare_policy(session.client("iam", config=SDK_CONFIG), settings, partition)
+        report("cdk.bootstrap_policy.ready", arn=arn.replace(settings.account, "ACCOUNT"))
         return 0
     if command in {"diff", "deploy", "cdk-bootstrap", "destroy"}:
         if command == "destroy":
             stack_outputs(session, settings)
+        if command == "cdk-bootstrap":
+            check_deploy_target(session, settings, stack_name=settings.bootstrap_stack)
         if command == "deploy":
             preflight(session, settings)
             check_deploy_target(session, settings)
@@ -397,11 +431,22 @@ def main() -> int:
     parser.add_argument(
         "command", choices=sorted(CLOUD_WRITES | {"synth", "diff-local", "diff", "aws-preflight"})
     )
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
-    parser.add_argument("--snapshot", type=UUID)
+    parser.add_argument("--data-dir", type=Path)
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--snapshot", type=UUID)
+    selection.add_argument("--latest", action="store_true")
     args = parser.parse_args()
     try:
-        return run(args.command, args.data_dir.resolve(), args.snapshot)
+        environment = project_environment()
+        root = args.data_dir or Path(environment.get("AEGIS_DATA_DIR") or "data")
+        snapshot = args.snapshot
+        if (
+            snapshot is None
+            and not args.latest
+            and args.command in {"publish-local", "verify-cloud"}
+        ):
+            snapshot = configured_snapshot(environment)
+        return run(args.command, root.resolve(), snapshot, environment)
     except (DataError, ValidationError, FileNotFoundError) as error:
         report(
             "cloud.error",

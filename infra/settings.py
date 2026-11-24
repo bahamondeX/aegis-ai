@@ -1,11 +1,12 @@
-import os
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from hashlib import sha256
 from re import fullmatch
 
 import boto3
 from botocore.config import Config
 
+from pipelines.config import project_environment
 from pipelines.io import DataError
 
 SDK_CONFIG = Config(
@@ -25,14 +26,21 @@ class Settings:
     profile: str
     project: str
     schedule_enabled: bool
+    deployment_approval: str = ""
+    budget_usd: str = ""
+    destroy_approval: str = ""
+    execution_policy_arn: str = ""
 
     @classmethod
-    def load(cls, *, offline: bool = False) -> "Settings":
-        account = os.getenv("AEGIS_AWS_ACCOUNT") or ("000000000000" if offline else "")
-        region = os.getenv("AEGIS_AWS_REGION") or ("us-east-1" if offline else "")
-        profile = os.getenv("AEGIS_AWS_PROFILE") or ""
-        project = os.getenv("AEGIS_PROJECT_PREFIX", "aegis-dev")
-        schedule = os.getenv("AEGIS_SCHEDULE_ENABLED", "0")
+    def load(
+        cls, *, offline: bool = False, environment: dict[str, str] | None = None
+    ) -> "Settings":
+        env = project_environment() if environment is None else environment
+        account = env.get("AEGIS_AWS_ACCOUNT") or ("000000000000" if offline else "")
+        region = env.get("AEGIS_AWS_REGION") or ("us-east-1" if offline else "")
+        profile = env.get("AEGIS_AWS_PROFILE") or ""
+        project = env.get("AEGIS_PROJECT_PREFIX", "aegis-dev")
+        schedule = env.get("AEGIS_SCHEDULE_ENABLED", "0")
         if not fullmatch(r"[0-9]{12}", account) or not fullmatch(
             r"[a-z]{2}(-[a-z0-9]+)+-\d", region
         ):
@@ -41,7 +49,17 @@ class Settings:
             raise DataError("set AEGIS_AWS_PROFILE and a real AEGIS_AWS_ACCOUNT for the project")
         if not fullmatch(r"aegis-[a-z0-9-]{2,18}[a-z0-9]", project) or schedule not in ("0", "1"):
             raise DataError("invalid project prefix or AEGIS_SCHEDULE_ENABLED")
-        return cls(account, region, profile, project, schedule == "1")
+        return cls(
+            account,
+            region,
+            profile,
+            project,
+            schedule == "1",
+            deployment_approval=env.get("AEGIS_DEPLOY_APPROVAL", ""),
+            budget_usd=env.get("AEGIS_BUDGET_USD", ""),
+            destroy_approval=env.get("AEGIS_DESTROY_APPROVAL", ""),
+            execution_policy_arn=env.get("AEGIS_CDK_EXECUTION_POLICY_ARN", ""),
+        )
 
     @property
     def stack(self) -> str:
@@ -50,6 +68,14 @@ class Settings:
     @property
     def database(self) -> str:
         return self.project.replace("-", "_")
+
+    @property
+    def bootstrap_qualifier(self) -> str:
+        return "a" + sha256(self.project.encode()).hexdigest()[:8]
+
+    @property
+    def bootstrap_stack(self) -> str:
+        return f"{self.project}-bootstrap"
 
     @property
     def secret_path(self) -> str:
@@ -63,12 +89,12 @@ class Settings:
         return session, identity["Arn"]
 
     def authorize(self) -> Decimal:
-        if os.getenv("AEGIS_DEPLOY_APPROVAL") != f"{self.account}/{self.region}/{self.project}":
+        if self.deployment_approval != f"{self.account}/{self.region}/{self.project}":
             raise DataError(
                 "explicit AEGIS_DEPLOY_APPROVAL for this account, region and prefix is required"
             )
         try:
-            budget = Decimal(os.getenv("AEGIS_BUDGET_USD", ""))
+            budget = Decimal(self.budget_usd)
         except InvalidOperation:
             raise DataError("set AEGIS_BUDGET_USD to the explicitly approved USD ceiling") from None
         if not budget.is_finite() or budget <= 0:

@@ -4,6 +4,7 @@ from pathlib import Path
 from aws_cdk import (
     App,
     CfnOutput,
+    DefaultStackSynthesizer,
     Duration,
     Environment,
     IgnoreMode,
@@ -50,9 +51,11 @@ def lake_stack(app: App, settings: Settings) -> Stack:
         app,
         settings.stack,
         env=Environment(account=settings.account, region=settings.region),
+        synthesizer=DefaultStackSynthesizer(qualifier=settings.bootstrap_qualifier),
     )
     Tags.of(stack).add("Project", "AEGIS")
     Tags.of(stack).add("Environment", "dev")
+    Tags.of(stack).add("AegisScope", settings.project)
     prefix = settings.project
     key = kms.Key(
         stack,
