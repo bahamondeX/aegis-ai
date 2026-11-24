@@ -85,6 +85,7 @@ test('CloudFront serves HTTPS and excludes unapproved users from analytics and a
 
 test('approved browser reads one snapshot and streams live evidence-backed mitigation', async ({ page, request, browser }) => {
   test.skip(!target?.startsWith('https://') || !fixture, 'The hosted journey requires actual AWS and temporary identities.')
+  test.setTimeout(180_000)
   const scoped = JSON.parse(await readFile(fixture!, 'utf8')) as HostedFixture
   if (!scoped.hosted) throw new Error('A hosted validation fixture is required')
   const bearer = await login(page, scoped.users.member)
@@ -105,8 +106,11 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   const source = await request.get('/api/aegis/v1/coverage', { headers })
   expect((await source.json()).snapshot_id).toBe(scoped.snapshot)
   expect((await request.get('/api/aegis/v1/admin/users', { headers })).status()).toBe(403)
-  const card = page.getByRole('button', { name: /^Open CVE detail for CVE-/ }).first()
-  await expect(card).toBeVisible({ timeout: 40_000 })
+  const relationship = page.getByLabel('Inspect a relationship')
+  await expect(relationship).toBeVisible({ timeout: 40_000 })
+  await relationship.selectOption({ index: 1 })
+  const card = page.getByRole('button', { name: 'Open CVE detail', exact: true })
+  await expect(card).toBeVisible()
   await page.screenshot({ path: join(evidence, 'production-command-center.png') })
   await card.click()
   await expect(page.getByRole('button', { name: 'How to mitigate' })).toBeVisible()
@@ -123,6 +127,7 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   const firstProgressMs = performance.now() - startedAt
   await expect(page.getByRole('heading', { name: 'Verified findings' })).toBeVisible({ timeout: 68_000 })
   const browserCompletionMs = performance.now() - startedAt
+  expect(browserCompletionMs - firstProgressMs).toBeGreaterThan(100)
   const frames = decode(await response.text())
   const terminal = frames.filter(frame => frame.type === 'done')
   expect(frames.map(frame => frame.seq)).toEqual(frames.map((_, index) => index + 1))
@@ -134,6 +139,7 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
   await writeFile(join(evidence, 'production-mitigation.json'), JSON.stringify({
     firstHeaderMs, firstProgressMs, browserCompletionMs, frames, countryExposure: [map, peruMap],
   }))
+  await page.getByRole('article', { name: 'Investigation report' }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(evidence, 'production-mitigation.png') })
 
   const initial = response.request()
@@ -154,10 +160,26 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
       },
       data: initial.postDataJSON(),
     })
-    expect([404, 424]).toContain(denied.status())
-    if (denied.status() === 424) expect(await denied.text()).toMatch(/404|not_found/)
+    expect([409, 424]).toContain(denied.status())
+    if (denied.status() === 424) expect(await denied.text()).toMatch(/409|invalid_cursor/)
   } finally { await peerContext.close() }
 
+})
+
+test('hosted cancellation and logout invalidate the active session', async ({ page, request, browser }) => {
+  test.skip(!target?.startsWith('https://') || !fixture, 'The hosted journey requires actual AWS and temporary identities.')
+  test.setTimeout(180_000)
+  const scoped = JSON.parse(await readFile(fixture!, 'utf8')) as HostedFixture
+  if (!scoped.hosted) throw new Error('A hosted validation fixture is required')
+  const bearer = await login(page, scoped.users.member)
+  const headers = { Authorization: bearer }
+  await expect(page.getByText('Exposure coverage unavailable')).toBeVisible()
+  // Warm two independent Lambda executions before the cancellation race.
+  const warmed = await Promise.all([
+    request.get('/api/aegis/v1/kpis', { headers, timeout: 65_000 }),
+    request.get('/api/aegis/v1/cves?limit=1', { headers, timeout: 65_000 }),
+  ])
+  expect(warmed.map(response => response.status())).toEqual([200, 200])
   const cancellation = page.evaluate(async ({ bearer, snapshot }) => {
     const key = crypto.randomUUID()
     const base = '/api/aegis/v1/investigations'
@@ -192,13 +214,32 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
         }
       }
     } finally { await reader.cancel() }
-    return { status, terminal: events.filter(event => event.type === 'done') }
+    return { status, terminal: events.filter(event => event.type === 'done'), key }
   }, { bearer, snapshot: scoped.snapshot })
   const stopped = await cancellation
   expect(stopped.status).toBe(200)
   expect(stopped.terminal).toHaveLength(1)
   expect(stopped.terminal[0]?.payload.status).toBe('cancelled')
-  const logout = await request.post('/api/aegis/v1/account/logout', { headers })
-  expect(logout.status()).toBe(204)
+  const peerContext = await browser.newContext({ baseURL: target })
+  try {
+    const peer = await login(await peerContext.newPage(), scoped.users.peer)
+    const denied = await request.post(scoped.runtime, {
+      headers: {
+        Authorization: peer, 'Idempotency-Key': stopped.key,
+        'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': crypto.randomUUID(),
+      },
+      data: { action: 'cancel', investigation_id: stopped.terminal[0]?.investigation_id },
+    })
+    expect([404, 424]).toContain(denied.status())
+    if (denied.status() === 424) expect(await denied.text()).toMatch(/404|not_found/)
+  } finally { await peerContext.close() }
+  const logout = page.waitForResponse(response => response.url().endsWith('/api/aegis/v1/account/logout'))
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+  expect((await logout).status()).toBe(204)
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
   expect((await request.get('/api/aegis/v1/coverage', { headers })).status()).toBe(401)
+  await writeFile(join(evidence, 'production-session-checks.json'), JSON.stringify({
+    terminalStatus: stopped.terminal[0]?.payload.status, terminalCount: stopped.terminal.length,
+    cancellationStatus: stopped.status, peerCancellationDenied: true, logoutRevokedAccess: true,
+  }))
 })

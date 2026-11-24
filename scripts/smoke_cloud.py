@@ -15,7 +15,10 @@ from pipelines.io import DataError
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--public-only", action="store_true")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--public-only", action="store_true")
+    scope.add_argument("--journey-only", action="store_true")
+    scope.add_argument("--session-only", action="store_true")
     args = parser.parse_args()
     env = project_environment()
     settings = Settings.load(environment=env)
@@ -68,6 +71,10 @@ def main() -> None:
         browser_env["AEGIS_BROWSER_HOSTED_FIXTURE"] = str(
             data / "evidence/agentcore/private/hosted-fixture.json"
         )
+        if args.journey_only:
+            command.extend(["-g", "approved browser reads"])
+        elif args.session_only:
+            command.extend(["-g", "hosted cancellation"])
         subprocess.run(command, env=browser_env, cwd=ROOT, check=True, timeout=240)
     finally:
         fixture("disable")

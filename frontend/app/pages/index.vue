@@ -17,6 +17,7 @@ const {
 
 const access = ref('')
 const loginError = ref('')
+const registrationOpen = ref(false)
 const menuOpen = ref(false)
 const activeSection = ref('overview')
 const filterPopover = ref(false)
@@ -88,7 +89,7 @@ watch(filters, current => {
   onlyKev.value = current.kev_only ?? false
 }, { immediate: true })
 
-async function handleLogin(method?: 'Google' | 'signup' | 'recovery') {
+async function handleLogin(method?: 'Google' | 'recovery') {
   try {
     loginError.value = ''
     if (auth.federated) await auth.signIn(method)
@@ -189,6 +190,8 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
 
         <section v-if="!hasSession" class="panel sign-in" aria-labelledby="sign-in-heading">
           <div class="icon-tile"><LockKeyhole :size="20" aria-hidden="true" /></div>
+          <NativeRegistration v-if="registrationOpen" @back="registrationOpen = false" @sign-in="handleLogin()" />
+          <template v-else>
           <h2 id="sign-in-heading">Connect your workspace</h2>
           <p>{{ auth.approvalRequired ? 'Sign in or request access to the threat intelligence workspace.' : 'Sign in to view the active intelligence snapshot and run investigations.' }}</p>
           <form @submit.prevent="handleLogin()">
@@ -199,10 +202,11 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
           </form>
           <div v-if="auth.approvalRequired" class="identity-actions">
             <UButton v-if="auth.googleEnabled" variant="outline" @click="handleLogin('Google')">Continue with Google</UButton>
-            <UButton variant="outline" @click="handleLogin('signup')">Register with email</UButton>
+            <UButton variant="outline" @click="registrationOpen = true">Register with email</UButton>
             <UButton variant="ghost" @click="handleLogin('recovery')">Forgot password?</UButton>
           </div>
           <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
+          </template>
         </section>
 
         <section v-else-if="!isSignedIn" class="panel sign-in" aria-labelledby="account-heading">

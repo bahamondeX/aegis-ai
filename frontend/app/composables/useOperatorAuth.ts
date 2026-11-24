@@ -69,8 +69,8 @@ export function useOperatorAuth() {
     expires.value = 0
   }
 
-  async function signIn(method?: 'Google' | 'signup' | 'recovery') {
-    const endpoint = method === 'signup' ? '/signup' : method === 'recovery' ? '/forgotPassword' : undefined
+  async function signIn(method?: 'Google' | 'recovery') {
+    const endpoint = method === 'recovery' ? '/forgotPassword' : undefined
     await getManager(endpoint).signinRedirect({
       extraQueryParams: method === 'Google' ? { identity_provider: 'Google' } : {},
     })

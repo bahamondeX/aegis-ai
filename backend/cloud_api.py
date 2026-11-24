@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable
+from functools import cache
 from time import monotonic
 from urllib.parse import unquote, urlsplit
 from uuid import UUID
@@ -98,7 +100,10 @@ class GatewayPaths:
 
 
 def gateway(
-    reader: SnapshotReader, auth: Auth, upstream: str, client: httpx.AsyncClient
+    reader: SnapshotReader | Callable[[], SnapshotReader],
+    auth: Auth,
+    upstream: str,
+    client: httpx.AsyncClient,
 ) -> FastAPI:
     app = create_app(reader, auth)
     app.add_middleware(GatewayPaths)
@@ -109,8 +114,10 @@ def gateway(
         await anyio.to_thread.run_sync(
             auth.authenticate, bearer, request.client.host if request.client else None
         )
-        if isinstance(payload, Investigation) and payload.snapshot_id != reader.snapshot:
-            raise ServiceError("snapshot_mismatch", "select the pinned release", 409)
+        if isinstance(payload, Investigation):
+            snapshot = await anyio.to_thread.run_sync(reader) if callable(reader) else reader
+            if payload.snapshot_id != snapshot.snapshot:
+                raise ServiceError("snapshot_mismatch", "select the pinned release", 409)
         key = request.headers.get("idempotency-key", "")
         cursor = request.headers.get("last-event-id", "0")
         if not KEY.fullmatch(key) or not re.fullmatch(r"[0-9]{1,3}", cursor):
@@ -220,6 +227,8 @@ def gateway(
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+    LOG.info("Hosted API starting")
     env = os.environ.copy()
     settings = Settings.load(offline=True, environment=env)
     if env.get("AWS_REGION") != settings.region or settings.account == "000000000000":
@@ -240,14 +249,27 @@ def main() -> None:
         cognito=True,
         directory=cloud_directory(session, env, settings.account, SDK_CONFIG),
     )
-    if (
-        session.client("sts", config=SDK_CONFIG).get_caller_identity()["Account"]
-        != settings.account
-    ):
-        raise DataError("API STS account does not match the project")
+
+    @cache
+    def load_snapshot() -> SnapshotReader:
+        try:
+            if (
+                session.client("sts", config=SDK_CONFIG).get_caller_identity()["Account"]
+                != settings.account
+            ):
+                raise DataError("API STS account does not match the project")
+            current = pinned_reader(session, settings, env)
+        except Exception as error:
+            LOG.error("Hosted release initialization failed: %s", type(error).__name__)
+            raise ServiceError(
+                "release_unavailable", "the pinned release is unavailable", 503
+            ) from error
+        LOG.info("Hosted API resolved pinned release %s", current.snapshot)
+        return current
+
     client = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(12))
     uvicorn.run(
-        gateway(pinned_reader(session, settings, env), auth, upstream, client),
+        gateway(load_snapshot, auth, upstream, client),
         host="0.0.0.0",
         port=8080,
         access_log=False,

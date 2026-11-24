@@ -134,6 +134,26 @@ def review_and_deploy(
         raise DataError(f"change set failed for {name}: {reason}")
     changes = [item["ResourceChange"] for item in reviewed["Changes"]]
     print(json.dumps({"stack": name, "changes": changes}, default=str), flush=True)
+    api_in_place = name == f"{settings.project}-hosting" and any(
+        item["LogicalResourceId"] == "ApiF70053CD" and item.get("Replacement") == "False"
+        for item in changes
+    )
+
+    def replaces_resource(item: dict[str, Any]) -> bool:
+        if item.get("Replacement") not in {"True", "Conditional"}:
+            return False
+        # CloudFormation traces the unchanged Lambda ARN into invoke permissions.
+        details = item.get("Details", [])
+        return not (
+            api_in_place
+            and item["ResourceType"] == "AWS::Lambda::Permission"
+            and item["Replacement"] == "Conditional"
+            and len(details) == 1
+            and details[0].get("ChangeSource") == "ResourceAttribute"
+            and details[0].get("CausingEntity") == "ApiF70053CD.Arn"
+            and details[0]["Target"].get("Name") == "FunctionName"
+        )
+
     if (
         not changes
         or len(changes) > max_changes
@@ -141,7 +161,7 @@ def review_and_deploy(
         or any(
             item["ResourceType"] not in types
             or item["Action"] not in {"Add", "Modify"}
-            or item.get("Replacement") in {"True", "Conditional"}
+            or replaces_resource(item)
             for item in changes
         )
     ):
