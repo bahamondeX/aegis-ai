@@ -1340,3 +1340,19 @@ G6/G7 still require hosted administrator lifecycle exercises, native
 confirmation and recovery, and a completed Google federation flow.
 The prior AWS session blocker for the three hosted identities is resolved.
 See `data/evidence/v2-activation/identity-{reconciliation,fixture-cleanup}.*`.
+
+## 2026-11-24T14:59Z — Official historical EPSS Bronze backfill complete
+
+The 1,998 outstanding dates committed under the reviewed historical
+campaign. The pinned official denominator is 2,042 available dates, all
+committed after including the 44 verified initial dates. Nine missing
+calendar dates remain upstream-absent. The new dates added 458,969,494
+verified score records. The first eight dates were reused during dispatch
+replay. Exactly 1,998 new work invocations billed 5,622,665 ms in total,
+with reported peak memory of 353 MB and gross estimated Lambda spend of
+about USD 0.0756. Control and data object checksums and versions remain
+in the per-date receipts. See `data/evidence/v2-activation/campaign-complete.json`.
+
+The existing lake is attaching the full committed archive into staging
+Iceberg, followed by the bounded Athena daily Gold reconciliation.
+The existing CloudFront origin responded HTTPS 200 during this check.
