@@ -1131,3 +1131,23 @@ during preparation.
 The account-wide Cost Explorer baseline covers prior days. It does not
 attribute the new V2 costs to the prefix. See
 `data/evidence/v2-activation/{preflight,first-object,cost-baseline}.json`.
+
+## 2026-11-24T14:08Z — AWS Bronze migration verified
+
+`uv run --locked --no-sync python -m pipelines.bronze_migrate --apply 89d66cb53b19c5cf1eac731e045c0cd3dddc4e194c385ffb2e65f45636c89872`
+exited 0. Attempt 1 uploaded 572 unique artifacts totaling 1,926,772,199
+bytes in 2,019.11 seconds, with 163,086,336 bytes of peak local RSS.
+The versioned, SSE-KMS manifest reconciles every SHA-256, byte count and
+version against the approved inventory. It records 43 verified EPSS dates.
+The payload counts are 6 CVE Program, 130 EPSS, 3 KEV current, 348 KEV
+history, 7 network and 78 NVD. The release evidence is
+`data/evidence/v2-activation/{migration,migration-reconciliation}.json`.
+
+`make test` passed 90 tests on the pinned snapshot, and
+`pnpm --dir frontend test` passed four contract tests. An initial direct
+pytest call lacked the required snapshot environment. The supported
+Make target supplies it and passes all six integration tests. `make lint
+ typecheck` exited 0. Logs are in `data/evidence/v2-activation/`.
+
+The 2-date EPSS plan was published and rechecked. CloudFormation began
+executing the reviewed change set after the migration committed.
