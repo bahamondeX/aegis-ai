@@ -951,3 +951,33 @@ and AWS session renewal. G1–G5 remain closed.
 Verified source increments were `a642ab2` for the combined browser harness
 and fixture receipts, `8bdfd1e` for the locally built administrator view,
 and `5358871` for globe-rendering readiness.
+
+## 2026-11-24T11:51:52Z — V2 local official vulnerability corpus verified
+
+The data audit recovered the pinned MVP and its verified production
+evidence at `e17565d`. The V2 capture uses separate local artifacts under
+`data/v2/vulnerabilities/`. The [V2 roadmap](ROADMAP_V2.md) and
+[ingestion runbook](docs/v2-ingestion.md) describe the milestones and
+source denominators.
+
+| Command or observation | Exit | Evidence under `data/evidence/v2/` |
+| --- | --- | --- |
+| `python -m pipelines.bulk_vulnerabilities kev nvd cve` | 0 after correction | `official-vulnerability-bulk-r2.log` and `vulnerability-baseline.json`. All 25 NVD annual feeds and the modified feed, the complete KEV catalog, and the CVE Program baseline and delta passed the source-count checks. |
+| `python -m pipelines.bulk_vulnerabilities kev nvd cve --sync-nvd` | 0 | `vulnerability-sync.log`. Existing captures and the NVD index reproduced the original match and completeness counts. |
+| `python -m pipelines.kev_history` | 0 after correction | `kev-history-r2.log` and `data/v2/kev-history/history.json`. 347 of 348 available Git revisions validated. One malformed upstream JSON revision was retained and recorded as a gap. |
+| Repeated official KEV history capture | 0 | `kev-history-replay.log`. The same Git head and checksum-verified segments reproduced all totals. |
+| `make lint typecheck test` | 0 | `regression-final.log`. 80 tests passed, including the pinned MVP regressions and V2 archive cases. |
+
+The first corpus attempt downloaded the correct CVE release asset but
+found zero CVE members in its outer ZIP. The corrected parser verified
+and streamed the nested ZIP from a bounded temporary file. It kept NVD
+and CVE Program payloads independently, including descriptions, status,
+all source metrics, references, applicability expressions and CNA/ADP
+containers. The CVE Program baseline and delta had 431,604 file records
+and 431,119 distinct CVEs. NVD had 440,131 file records and 431,114
+distinct CVEs. KEV matched both sources on 1,792 of 1,792 CVEs.
+No records were rejected or duplicated within the current artifacts.
+The corrected bulk run took 52.02 seconds with a peak RSS of 522,403,840
+bytes. The original archive retrieval took 399.93 seconds before it
+encountered the ZIP wrapper. Incremental verification took 33.56 seconds.
+V2 AWS writes and model calls totalled zero.

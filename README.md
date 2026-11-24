@@ -63,6 +63,10 @@ ingest live feeds to create a new local snapshot and ID.
 
 ## Data semantics
 
+The V2 local ingestion command archives the complete pinned KEV, NVD and
+CVE Program source corpora alongside the MVP release. See the
+[V2 roadmap](ROADMAP_V2.md) and [bulk data runbook](docs/v2-ingestion.md).
+
 - The enrichment cursor ranks unvisited KEV CVEs by catalog addition date, EPSS and CVE ID.
   It rotates after the cohort is exhausted and carries forward earlier NVD enrichment by
   modification date. CVSS uses the newest reported version and prefers a primary metric
