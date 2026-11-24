@@ -138,3 +138,19 @@ has no Glue or Athena write authority.
 
 [Data dictionary](data-dictionary.md) · [Temporal rules](timeseries.md) ·
 [Serving contracts](serving-contracts.md)
+
+## Staging EPSS in the existing Glue database
+
+The two-date staging component uses `aegis_dev.fact_epss_daily` in a dedicated
+`v2/silver/` location. Reproduce its verification with
+`python -m scripts.verify_v2_silver --evidence data/evidence/v2-activation`.
+The operator requires the passed AWS canary, verifies the existing encrypted
+Athena workgroup, and reserves each attempt before writes. A committed
+receipt replays without running more Athena queries. The receipt binds the
+versioned Gold daily Parquet to the Iceberg snapshot. Its staging visibility
+leaves the active MVP release pointer outside the operation.
+
+The verification uses a finite set of date-filtered queries. Counting
+records alone allows Athena to answer from metadata. The threshold aggregate
+forces column reads so the two-date and single-date scans can be compared.
+See [the measured parity and scan results](../STATUS.md).

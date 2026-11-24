@@ -1179,3 +1179,25 @@ plan bound. Account-wide billing lacks current V2 attribution.
 records the immutable inputs and AWS results. The deployed MVP release and
 G6/G7 identity evidence retain their prior status. Start a bounded, reviewed
 historical campaign using the remaining one-time scope.
+
+## 2026-11-24T14:18Z — AWS EPSS staging Silver and daily Gold verified
+
+`uv run --locked --no-sync python -m scripts.verify_v2_silver --evidence data/evidence/v2-activation --attempt 2`
+exited 0. Athena engine 3 and DuckDB reconciled 821,404 records from
+2026-11-20 and 2026-11-21 in Iceberg v2 `aegis_dev.fact_epss_daily` at
+snapshot `6584160014860092565`. Same-component replay kept that snapshot.
+A two-row, 2,946-byte Gold rollup was published to versioned, SSE-KMS S3
+with a matching component and SHA-256.
+
+| Athena date scope | Scan bytes | Total time |
+| --- | ---: | ---: |
+| Both dates | 1,814,523 | 1,061 ms |
+| Nov 20 | 906,836 | 1,212 ms |
+| Nov 21 | 907,687 | 1,262 ms |
+
+The first probe's count-only queries matched the rows but did not prove
+partition pruning. The corrected probe also evaluates an EPSS score
+threshold and observes the expected data scans. The three successful
+queries estimate USD 0.00015 in gross Athena charges at the per-query
+minimum. Query IDs and object references are in
+`data/evidence/v2-activation/silver.json`. This is a staging component.

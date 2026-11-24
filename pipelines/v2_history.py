@@ -40,16 +40,16 @@ NAMESPACE = "aegis_v2_pilot"
 SCHEMA = BRONZE_SCHEMA.append(pa.field("evidence_key", pa.string(), nullable=False))
 
 
-def init_table(catalog: Catalog, warehouse: str) -> Table:
+def init_table(catalog: Catalog, warehouse: str, *, namespace: str = NAMESPACE) -> Table:
     schema = assign_fresh_schema_ids(Catalog._convert_schema_if_needed(SCHEMA))
     partition = PartitionSpec(
         PartitionField(
             schema.find_field("score_date").field_id, 1000, IdentityTransform(), "score_date"
         ),
     )
-    location = f"{warehouse}/{NAMESPACE}/{NAME}"
+    location = f"{warehouse}/{namespace}/{NAME}"
     table = catalog.create_table_if_not_exists(
-        (NAMESPACE, NAME),
+        (namespace, NAME),
         schema,
         location=location,
         partition_spec=partition,
