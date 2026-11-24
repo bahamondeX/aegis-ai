@@ -1201,3 +1201,23 @@ threshold and observes the expected data scans. The three successful
 queries estimate USD 0.00015 in gross Athena charges at the per-query
 minimum. Query IDs and object references are in
 `data/evidence/v2-activation/silver.json`. This is a staging component.
+
+## 2026-11-24T14:20Z — Historical EPSS campaign active in AWS
+
+The refreshed official tree `e29d8f597d069b723f6960f645555c82c7447367`
+contains 2,042 available dates and nine upstream-absent dates. The campaign
+`cc2e657a7c5d784b4622e13668af3c1d755111f6ab197e21dd2f01f3ec4bedff`
+reconciled 44 existing dates and committed 65 versioned window plans for
+1,998 outstanding dates. Its USD 10.93 upper bound fits the USD 11.00
+allocation within the USD 15 one-time ceiling. The USD 10 monthly pilot
+retains its separate scope.
+
+CloudFormation updated the worker and its IAM policy in place in 46.63 s,
+without replacement. The approved ARM64 image digest is
+`sha256:2e4952463b374536a5cebcbcafa79693853ddbb499dce92036c9c400b3345a5b`.
+The first eight dates (2021-05-14 through 2021-05-21) committed 532,226 rows.
+They billed 25,322 ms combined, with median duration 1,542.52 ms and
+reported maximum memory 296 MB. The full-window dispatcher is running
+with four concurrent Lambda calls and immutable attempt reservations.
+The rollout added no scheduler. Evidence is in
+`data/evidence/v2-activation/history-{plan,change-set,first-eight,full}.*`.

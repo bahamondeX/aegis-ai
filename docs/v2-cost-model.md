@@ -100,3 +100,12 @@ the exact 572-object migration and USD 0.30 for the two-date EPSS plan.
 The USD 10 monthly pilot becomes applicable after successful canary and
 cost reconciliation. Later reviewed plans and usage receipts must fit
 the remaining one-time budget. [Execution record](../STATUS.md)
+
+The live canary used three Lambda calls and about USD 0.000143 at gross
+regional rates. The approved historical campaign targets 1,998 outstanding
+dates with 2,775,530,980 raw bytes and up to 8,326,592,940 normalized bytes.
+It reserves USD 11.00 for a modeled upper bound of USD 10.93, including all
+three attempts per date and a cold-start allowance. Together with the USD
+0.70 initial allocations and USD 0.15 staging EPSS validation allocation,
+USD 3.15 of the one-time ceiling remains unallocated. Billing attribution
+for the activation remains pending.

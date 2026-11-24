@@ -94,14 +94,11 @@ def verify(canary: dict, attempt: int) -> dict:
     rel = f'"{db}"."{NAME}" FOR VERSION AS OF {release["snapshot_id"]}'
     threshold_counts = {}
     for day in plan["members"]:
-        scores = (
-            table.scan(
-                snapshot_id=release["snapshot_id"],
-                row_filter=EqualTo("score_date", date.fromisoformat(day)),
-                selected_fields=("epss",),
-            )
-            .to_arrow()["epss"]
-        )
+        scores = table.scan(
+            snapshot_id=release["snapshot_id"],
+            row_filter=EqualTo("score_date", date.fromisoformat(day)),
+            selected_fields=("epss",),
+        ).to_arrow()["epss"]
         threshold_counts[day] = pc.sum(pc.greater_equal(scores, 0.95)).as_py() or 0
     checks = []
     for selected in (list(plan["members"]), ["2026-11-20"], ["2026-11-21"]):
@@ -112,11 +109,9 @@ def verify(canary: dict, attempt: int) -> dict:
             max_rows=len(selected),
         )
         expected_counts = {day: release["days"][day] for day in selected}
-        if (
-            {row["score_date"].isoformat(): row["records"] for row in rows} != expected_counts
-            or {row["score_date"].isoformat(): row["high"] for row in rows}
-            != {day: threshold_counts[day] for day in selected}
-        ):
+        if {row["score_date"].isoformat(): row["records"] for row in rows} != expected_counts or {
+            row["score_date"].isoformat(): row["high"] for row in rows
+        } != {day: threshold_counts[day] for day in selected}:
             raise DataError("Athena and DuckDB date counts differ on the pinned Silver snapshot")
         checks.append({"dates": expected_counts, **metrics})
     if not max(x["scanned_bytes"] for x in checks[1:]) < checks[0]["scanned_bytes"]:

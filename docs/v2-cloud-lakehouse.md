@@ -154,3 +154,38 @@ The verification uses a finite set of date-filtered queries. Counting
 records alone allows Athena to answer from metadata. The threshold aggregate
 forces column reads so the two-date and single-date scans can be compared.
 See [the measured parity and scan results](../STATUS.md).
+
+## Historical EPSS campaign
+
+`scripts.v2_epss_campaign plan` compares a verified official archive tree with
+the versioned S3 date receipts. It writes a local bundle with the official
+denominator, absent dates, each window digest, only the missing members to
+dispatch, and per-member size limits. Review the bundle and bind
+`AEGIS_V2_HISTORY_APPROVAL` to
+`<account>/<region>/<project>/epss-history/<campaign-digest>`.
+`AEGIS_V2_HISTORY_USD`, the initial allocations, and the overall one-time
+ceiling guard publication and execution.
+
+`publish` verifies every window against the source tree, writes the immutable
+window receipts and commits the campaign last. Synthesize the existing
+worker stack with `AEGIS_CDK_V2_HISTORY=1` and `ApprovedCampaignDigest`.
+Review a live change set for in-place worker and policy updates before
+execution. The manually triggered function has four reserved concurrent
+invocations and preserves the existing 120-second, 1 GiB runtime bounds.
+
+```sh
+uv run --locked --no-sync python -m scripts.v2_epss_campaign plan \
+  --tree <official-tree.json> --bundle <reviewed-bundle.json>
+uv run --locked --no-sync python -m scripts.v2_epss_campaign publish \
+  --tree <official-tree.json> --bundle <reviewed-bundle.json>
+uv run --locked --no-sync python -m scripts.v2_epss_campaign run \
+  --bundle <reviewed-bundle.json> --limit 8
+```
+
+Review the measured initial dates before dispatching a larger tranche.
+The coordinator reserves each dispatch in S3. The worker accepts only
+reserved days in approved windows and verifies actual source bytes. After
+an interruption, the coordinator reuses committed dates. Inspect each
+unsettled dispatch before reserving its next attempt. The `--since` and
+`--limit` options can isolate a specific date. Each attempt has one durable
+dispatch record, and the campaign caps each date at three reservations.

@@ -13,10 +13,17 @@ from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
 
 from infra.settings import Settings
-from pipelines.bronze import PREFIX, LocalBronze, S3Bronze, artifact, ensure, record
+from pipelines.bronze import PREFIX, LocalBronze, S3Bronze, artifact, ensure, put_record, record
 from pipelines.bronze_migrate import Item, authorized_store, describe, migrate
 from pipelines.bulk_epss import git_blob_sha1
-from pipelines.epss_bronze import run_date, stage_plan
+from pipelines.epss_bronze import (
+    campaign_key,
+    check_dispatch,
+    dispatch_key,
+    plan_id,
+    run_date,
+    stage_plan,
+)
 from pipelines.io import DataError
 
 
@@ -159,3 +166,20 @@ def test_ep_client_persists_attempt_and_skips_committed_date(tmp_path: Path):
         assert result["counts"]["missing_percentile"] == 1
         assert run_date(store, client, plan, test_day, 2)["reused"] is True
         assert calls == 2
+
+
+def test_campaign_requires_pinned_window_date_and_immutable_dispatch(tmp_path: Path):
+    store = LocalBronze(tmp_path)
+    window, day = "a" * 64, "2021-04-14"
+    value = {"windows": {window: {day: 512 * 1024}}}
+    campaign = plan_id(value)
+    put_record(store, campaign_key(campaign), value)
+    event = {"campaign": campaign, "plan": window, "date": day, "attempt": 1}
+    with pytest.raises(DataError, match="no reserved dispatch"):
+        check_dispatch(store, event, campaign)
+    put_record(store, dispatch_key(campaign, window, day, 1), event)
+    assert check_dispatch(store, event, campaign) == 512 * 1024
+    with pytest.raises(DataError, match="outside the reviewed historical dispatch"):
+        check_dispatch(store, {**event, "date": "2021-04-15"}, campaign)
+    with pytest.raises(DataError, match="outside its reviewed historical campaign"):
+        check_dispatch(store, {**event, "plan": "b" * 64}, campaign)

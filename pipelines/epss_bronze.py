@@ -81,6 +81,42 @@ def plan_key(identity: str) -> str:
     return f"{PREFIX}/manifests/epss-plans/{identity}.json"
 
 
+def campaign_key(identity: str) -> str:
+    if not HEX.fullmatch(identity):
+        raise DataError("invalid V2 campaign digest")
+    return f"{PREFIX}/manifests/epss-campaigns/{identity}/plan.json"
+
+
+def dispatch_key(campaign: str, window: str, day: str, attempt: int) -> str:
+    if (
+        not HEX.fullmatch(window)
+        or date.fromisoformat(day).isoformat() != day
+        or type(attempt) is not int
+        or not 1 <= attempt <= ATTEMPTS
+    ):
+        raise DataError("invalid V2 historical dispatch")
+    prefix = campaign_key(campaign).removesuffix("plan.json")
+    return f"{prefix}dispatch/{window}/{day}/{attempt}.json"
+
+
+def check_dispatch(store: BronzeStore, event: dict[str, Any], campaign: str) -> int:
+    spec = record(store, campaign_key(campaign))
+    if (
+        not spec
+        or plan_id(spec) != campaign
+        or event.get("campaign") != campaign
+        or event.get("plan") not in spec["windows"]
+    ):
+        raise DataError("EPSS invocation is outside its reviewed historical campaign")
+    window, day, attempt = event["plan"], event["date"], event["attempt"]
+    limit = spec["windows"][window].get(day)
+    if type(limit) is not int or not 0 < limit <= PARQUET_LIMIT:
+        raise DataError("EPSS date is outside the reviewed historical dispatch")
+    if not record(store, dispatch_key(campaign, window, day, attempt)):
+        raise DataError("EPSS invocation has no reserved dispatch")
+    return limit
+
+
 def build_plan(tree: dict, start: date, end: date, tree_ref: ObjectRef) -> dict:
     if not FIRST_DAY <= start <= end or (end - start).days >= PLAN_DATES:
         raise DataError("choose an EPSS window of at most 32 calendar days")
@@ -154,6 +190,8 @@ def run_date(
     identity: str,
     day: date,
     attempt: int,
+    *,
+    parquet_limit: int = PARQUET_LIMIT,
 ) -> dict:
     date_text = day.isoformat()
     if type(attempt) is not int or not 1 <= attempt <= ATTEMPTS:
@@ -179,7 +217,7 @@ def run_date(
             "state": "running",
             "attempt": attempt,
             "max_source_bytes": entry["size"],
-            "max_parquet_bytes": PARQUET_LIMIT,
+            "max_parquet_bytes": parquet_limit,
         },
         exact=False,
     ):
@@ -194,7 +232,7 @@ def run_date(
             if git_blob_sha1(raw) != blob:
                 raise DataError("upstream EPSS member differs from the pinned fingerprint")
             counts, metadata = normalize(raw, parquet, day)
-            if counts["duplicate"] or counts["rejected"] or parquet.stat().st_size > PARQUET_LIMIT:
+            if counts["duplicate"] or counts["rejected"] or parquet.stat().st_size > parquet_limit:
                 raise DataError("EPSS input failed normalized record or size validation")
             raw_ref, _ = ensure(store, artifact("epss", "raw", raw), raw)
             parquet_ref, _ = ensure(store, artifact("epss", "normalized", parquet), parquet)
@@ -242,9 +280,9 @@ def handler(event: dict[str, Any], context: Any) -> dict:
     scope = os.environ["AEGIS_V2_ACCOUNT"]
     region = os.environ["AWS_REGION"]
     identity = os.environ["AEGIS_V2_PLAN_ID"]
-    if (
-        context.invoked_function_arn.split(":")[3:5] != [region, scope]
-        or event.get("plan") != identity
+    campaign = os.getenv("AEGIS_V2_CAMPAIGN_ID", "")
+    if context.invoked_function_arn.split(":")[3:5] != [region, scope] or (
+        not campaign and event.get("plan") != identity
     ):
         raise DataError("EPSS worker was invoked outside its reviewed scope")
     session = boto3.Session(region_name=region)
@@ -256,11 +294,20 @@ def handler(event: dict[str, Any], context: Any) -> dict:
         scope,
         os.environ["AEGIS_V2_KMS"],
     )
+    parquet_limit = PARQUET_LIMIT
+    if campaign:
+        parquet_limit = check_dispatch(store, event, campaign)
+        identity = event["plan"]
     with httpx.Client(
         timeout=20, follow_redirects=True, headers={"Accept-Encoding": "identity"}
     ) as client:
         outcome = run_date(
-            store, client, identity, date.fromisoformat(event["date"]), event.get("attempt", 1)
+            store,
+            client,
+            identity,
+            date.fromisoformat(event["date"]),
+            event.get("attempt", 1),
+            parquet_limit=parquet_limit,
         )
     return {key: outcome[key] for key in ("state", "score_date")}
 
