@@ -11,3 +11,5 @@ node_modules/
 .nuxt/
 .output/
 frontend/.test-dist/
+frontend/test-results/
+frontend/playwright-report/

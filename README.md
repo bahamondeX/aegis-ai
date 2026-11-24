@@ -7,8 +7,8 @@ DuckDB views. The default query command prints aggregate results.
 ## Quickstart
 
 Use native Apple Silicon, Python 3.12 via uv, and the toolchain reported by `make preflight`.
-The Node and pnpm pins are for the later Nuxt work. The Python install uses `uv.lock`.
-[Nuxt 3 requirements](https://nuxt.com/docs/3.x/getting-started/installation) ·
+Nuxt 4 uses the pinned Node and pnpm versions. The Python install uses `uv.lock`.
+[Nuxt 4 requirements](https://nuxt.com/docs/4.x/getting-started/installation) ·
 [pnpm compatibility](https://pnpm.io/installation)
 
 ```sh
@@ -160,7 +160,42 @@ and `uv run --locked --no-sync python -m scripts.verify_frontend_stream`.
 Regenerate the wire schema with `uv run --locked --no-sync python -m
 scripts.export_investigation_schema`, followed by `pnpm --dir frontend contracts`.
 
-Live inference requires the separate Bedrock approval and rates in
-[.env.example](.env.example). The deployment prerequisites, prices and measured
-local verification are recorded in the [G4 runbook](docs/g4-investigations.md)
-and [status log](STATUS.md).
+The live Nova Micro gate passed under the scoped Bedrock approval. The
+[G4 runbook](docs/g4-investigations.md) documents the approval and allocation
+settings. The [status log](STATUS.md) records the measured latency, token
+usage and independent budget fallback test.
+
+## G5 command center
+
+The dashboard runs on Nuxt 4.7, Nuxt UI 4 and Tailwind CSS 4 with strict
+TypeScript. Node 22.22.3 and pnpm 10.32.1 are pinned. The operator interface
+includes the geographic globe and tactical map, the CVE relationship canvas,
+EPSS by rank, source coverage, evidence inspection, and a streamed
+investigation workspace.
+
+```sh
+make frontend-install
+make dev
+```
+
+In a second terminal, run `sh scripts/frontend.sh dev`, open
+`http://localhost:3000`, and enter the development access token from
+`data/local-api.token`. The Nuxt server proxies API requests to the
+loopback API and forwards the operator token. It uses the same pinned
+real snapshot for charts, filters and source provenance. Country contours
+are from Natural Earth. The exposure layer only highlights countries with
+evidence in the selected cohort.
+
+For a production-mode local check, install Playwright Chromium with
+`sh scripts/frontend.sh exec playwright install chromium --only-shell`,
+then run the verification sequence.
+
+```sh
+make lint-ui typecheck-ui build-ui smoke-ui
+sh scripts/frontend.sh test
+```
+
+The [G4 and AgentCore runbook](docs/g4-investigations.md) describes the
+authorized Cognito and runtime configuration. [STATUS.md](STATUS.md) links
+the observed browser check outputs and screenshots. Cloud hosting and a
+standalone cloud API are separate deployment work.

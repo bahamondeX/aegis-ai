@@ -17,7 +17,10 @@ aws --version
 
 node_pin="$(cat .nvmrc)"
 node_home="${NVM_DIR:-$HOME/.nvm}/versions/node/v$node_pin/bin"
-if [ -x "$node_home/node" ]; then
+if [ -x "data/toolchain/node-$node_pin/bin/node" ]; then
+    PATH="$(pwd)/data/toolchain/node-$node_pin/bin:$PATH"
+    export PATH
+elif [ -x "$node_home/node" ]; then
     PATH="$node_home:$PATH"
     export PATH
 fi
@@ -25,7 +28,7 @@ test "$(node --version)" = "v$node_pin"
 node -p 'JSON.stringify({node:process.version, architecture:process.arch})'
 test "$(node -p 'process.arch')" = arm64
 # pnpm is pinned for G5. G1 reports availability without installing a package manager.
-printf 'Deferred pnpm pin %s\n' "$(cat .pnpm-version)"
+printf 'Frontend pnpm pin %s\n' "$(cat .pnpm-version)"
 if command -v pnpm >/dev/null 2>&1; then
     pnpm --version
 elif command -v corepack >/dev/null 2>&1; then

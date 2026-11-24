@@ -505,3 +505,37 @@ no-inference fallback smoke. Their three recorded outputs are preserved
 in `reporting-reruns.jsonl`. Across all four successful live investigations,
 Converse recorded 2,535 input and 403 output tokens, estimated at
 $0.000145145. The formatting command was corrected before commit.
+
+## 2026-11-24T03:42:10Z — G5 PASS on Nuxt 4
+
+Migrated the architecture to Nuxt 4.7.0, Nuxt UI 4.13.1, Tailwind CSS
+4.3.0, native Node 22.22.3 and pnpm 10.32.1. Verified the downloaded
+Apple Silicon Node archive against its published SHA-256. The dashboard
+uses the existing authenticated API and pinned real release. The
+globe, MapLibre tactical view, evidence-bound deck.gl overlay,
+Cytoscape graph and ECharts EPSS chart are client-side. Charts,
+ranked CVEs and relationship drill-downs share the authenticated view.
+
+| Verification | Exit | Result |
+| --- | --- | --- |
+| `make lint-ui` and `make typecheck-ui` | 0 each | ESLint and Nuxt strict TypeScript |
+| `sh scripts/frontend.sh test` | 0 | Four SSE and filter-state tests |
+| `make build-ui` | 0 | Production Nuxt build completed in 6.27 s. Client chunks totaled 7.76 MB, 2.53 MB gzip. Visualization chunks load on demand. Vite reported its 500 kB chunk-size warning. |
+| `make smoke-ui` | 0 | Two Chromium tests in 16.9 s on the production build. Verified the desktop and mobile layouts, real KPI response, rendered map and graph, evidence drawer, live SSE, applied proposal and unavailable Peru scope. |
+| `uv run --locked --no-sync python -m scripts.smoke_dashboard --cognito` | 0 | One additional Chromium test in 27.8 s, before the final map and display refinements. Verified hosted Cognito Authorization Code with S256 PKCE, memory-only tokens, direct live AgentCore SSE through the Nuxt proxy, and an actual Bedrock report. |
+| `sh scripts/frontend.sh audit` | 0 | No known vulnerabilities after pinning the affected nested minimatch dependency to 11.0.1. |
+| `make verify-phase1` | 0 | 56 Python regression tests passed. Real snapshot replay reproduced the same Parquet hashes and sampled query results. |
+
+Evidence is under `data/evidence/g5/`. Inspected `desktop.png`,
+`tactical.png`, `investigation.png`, `evidence.png`, `mobile.png`,
+`mobile-sources.png` and `cognito-agentcore.png`. The first browser
+loop accepted a blank tactical canvas. Added an explicit MapLibre worker
+asset, fixed the map container height, and required rendered country features
+and a visible map viewport in Playwright. Inspected the corrected
+screenshot. Geographic exposure on the selected release stays unavailable,
+and the map renders only the contextual outlines. The desktop browser
+confirmed that applying the investigation proposal refreshed the ranked
+table to three rows while synchronizing the graph and KPIs.
+
+The dashboard ran locally in production mode. Frontend hosting and a
+standalone cloud API are outside the authorized deployment.

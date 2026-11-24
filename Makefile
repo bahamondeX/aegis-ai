@@ -4,6 +4,7 @@ CLI = $(RUN) python -m pipelines.cli
 LAKE = $(RUN) python -m infra.operations
 API = $(RUN) python -m backend.cli
 AGENT = $(RUN) python -m backend.agentcore
+FRONTEND = sh scripts/frontend.sh
 SELECT = $(if $(SNAPSHOT),--snapshot "$(SNAPSHOT)")
 LATEST_SELECT = $(if $(filter 1,$(LATEST)),--latest)
 G2_TARGETS = aws-preflight synth diff diff-local prepare-bootstrap-policy cdk-bootstrap deploy secrets-sync init-tables publish-local ingest-cloud verify-cloud destroy
@@ -54,6 +55,29 @@ smoke-agent-local:
 
 synth-agent:
 	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agentcore_stack
+
+.PHONY: deploy-agent audit-agent frontend-install lint-ui typecheck-ui build-ui smoke-ui
+deploy-agent:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agent_deploy identity
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agent_deploy runtime
+
+audit-agent:
+	$(RUN) python -m scripts.verify_agent_deployment
+
+frontend-install:
+	$(FRONTEND) install --frozen-lockfile
+
+lint-ui:
+	$(FRONTEND) lint
+
+typecheck-ui:
+	$(FRONTEND) typecheck
+
+build-ui:
+	$(FRONTEND) build
+
+smoke-ui:
+	$(RUN) python -m scripts.smoke_dashboard
 
 $(G2_TARGETS):
 	$(LAKE) $@ $(SELECT) $(LATEST_SELECT)

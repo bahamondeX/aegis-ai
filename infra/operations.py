@@ -58,6 +58,9 @@ def cdk(settings: Settings, command: str, root: Path, *, offline: bool = False) 
     node_pin = (ROOT / ".nvmrc").read_text().strip()
     nvm_root = Path(os.getenv("NVM_DIR", str(Path.home() / ".nvm")))
     node_bin = nvm_root / "versions" / "node" / f"v{node_pin}" / "bin"
+    project_node = ROOT / "data" / "toolchain" / f"node-{node_pin}" / "bin"
+    if (project_node / "node").is_file():
+        node_bin = project_node
     if (node_bin / "node").is_file():
         env["PATH"] = f"{node_bin}{os.pathsep}{env.get('PATH', '')}"
     node = subprocess.run(["node", "--version"], env=env, capture_output=True, text=True)
