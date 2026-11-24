@@ -80,6 +80,7 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
     model_id = parameter("ModelId", r"[a-z][a-z0-9_-]*\.[a-z0-9.:-]{1,100}")
     issuer = parameter("OidcIssuer", r"https://[^/?#]+(?:/[^/?#]+)*")
     jwks = parameter("OidcJwks", r"https://[^?#]+")
+    pool = parameter("CognitoPool", rf"{settings.region}_[A-Za-z0-9]+")
     audience = parameter("OidcAudience", r"[A-Za-z0-9:/._-]{1,128}")
     workspace = parameter("OidcWorkspace", r"[A-Za-z0-9._-]{1,64}")
     ceiling_pattern = r"[0-9]+(?:\.[0-9]{1,8})?"
@@ -132,6 +133,14 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
     model = f"arn:{stack.partition}:bedrock:{stack.region}::foundation-model/{model_id}"
     policy = iam.PolicyDocument(
         statements=[
+            iam.PolicyStatement(
+                actions=["cognito-idp:AdminGetUser", "cognito-idp:AdminListGroupsForUser"],
+                resources=[arn("cognito-idp", "userpool", pool)],
+            ),
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[checkpoints.arn_for_objects("identity/accounts/*")],
+            ),
             iam.PolicyStatement(actions=["ecr:GetAuthorizationToken"], resources=["*"]),
             iam.PolicyStatement(
                 actions=["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
@@ -289,6 +298,7 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
             "AEGIS_RESULTS_BUCKET": results.bucket_name,
             "AEGIS_LAKE_KMS_ARN": key_arn,
             "AEGIS_CHECKPOINT_BUCKET": checkpoints.bucket_name,
+            "AEGIS_IDENTITY_BUCKET": checkpoints.bucket_name,
             "AEGIS_SNAPSHOT": snapshot,
             "AEGIS_OIDC_ISSUER": issuer,
             "AEGIS_OIDC_AUDIENCE": audience,

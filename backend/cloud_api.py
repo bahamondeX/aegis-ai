@@ -21,6 +21,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from backend.api import create_app
 from backend.auth import Auth
 from backend.cloud_reader import pinned_reader
+from backend.identity import cloud_directory
+from backend.identity_routes import install_identity
 from backend.investigations.contracts import CancelRequest
 from backend.investigations.contracts import Request as Investigation
 from backend.models import ServiceError
@@ -33,6 +35,8 @@ KEY = re.compile(r"[A-Za-z0-9._-]{16,128}")
 READS = re.compile(
     r"/v1/(?:coverage|cves(?:/CVE-\d{4}-\d{4,24})?|kpis|graph|map|evidence/[a-f0-9]{64})"
 )
+ACCOUNT = re.compile(r"/v1/(?:account|admin/users(?:/[\w@.+-]{1,128}/audit)?)")
+ADMIN_CHANGE = re.compile(r"/v1/admin/users/[\w@.+-]{1,128}")
 CANCEL = re.compile(r"/v1/investigations/[a-f0-9-]{36}/cancel")
 LOG = logging.getLogger(__name__)
 
@@ -71,8 +75,13 @@ class GatewayPaths:
             await Response(status_code=204)(scope, receive, send)
             return
         route = path.removeprefix(PREFIX)
-        allowed = (method == "GET" and READS.fullmatch(route)) or (
-            method == "POST" and (route == "/v1/investigations" or CANCEL.fullmatch(route))
+        allowed = (method == "GET" and (READS.fullmatch(route) or ACCOUNT.fullmatch(route))) or (
+            method == "POST"
+            and (
+                route in {"/v1/investigations", "/v1/account/logout"}
+                or CANCEL.fullmatch(route)
+                or ADMIN_CHANGE.fullmatch(route)
+            )
         )
         if not path.startswith(PREFIX + "/") or not allowed:
             await Response(status_code=404)(scope, receive, send)
@@ -93,6 +102,7 @@ def gateway(
 ) -> FastAPI:
     app = create_app(reader, auth)
     app.add_middleware(GatewayPaths)
+    install_identity(app, auth)
 
     async def relay(request: Request, payload: Investigation | CancelRequest) -> Response:
         bearer = request.headers.get("authorization", "")
@@ -221,14 +231,15 @@ def main() -> None:
         issuer,
     ):
         raise DataError("expected a regional Cognito issuer")
+    session = boto3.Session(region_name=settings.region)
     auth = Auth(
         issuer=issuer,
         audience=env["AEGIS_OIDC_AUDIENCE"],
         workspace=settings.project,
         jwks_url=f"{issuer}/.well-known/jwks.json",
         cognito=True,
+        directory=cloud_directory(session, env, settings.account, SDK_CONFIG),
     )
-    session = boto3.Session(region_name=settings.region)
     if (
         session.client("sts", config=SDK_CONFIG).get_caller_identity()["Account"]
         != settings.account

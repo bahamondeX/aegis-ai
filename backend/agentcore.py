@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from backend.api import create_app
 from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth
 from backend.cloud_reader import pinned_reader
+from backend.identity import cloud_directory
 from backend.investigations.bedrock import make_selector, model_available, read_amount
 from backend.investigations.service import InvestigationService
 from backend.investigations.store import S3Store, SQLiteStore
@@ -36,14 +37,15 @@ def runtime_app(environment: dict[str, str]) -> FastAPI:
     ceiling = read_amount(environment, "AEGIS_BEDROCK_BUDGET_USD")
     in_rate = read_amount(environment, "AEGIS_BEDROCK_INPUT_USD_PER_MILLION")
     out_rate = read_amount(environment, "AEGIS_BEDROCK_OUTPUT_USD_PER_MILLION")
+    session = boto3.Session(region_name=settings.region)
     auth = Auth(
         issuer=environment["AEGIS_OIDC_ISSUER"],
         audience=environment["AEGIS_OIDC_AUDIENCE"],
         workspace=environment["AEGIS_OIDC_WORKSPACE"],
         jwks_url=environment["AEGIS_OIDC_JWKS"],
         cognito=True,
+        directory=cloud_directory(session, environment, settings.account, SDK_CONFIG),
     )
-    session = boto3.Session(region_name=settings.region)
     if (
         session.client("sts", config=SDK_CONFIG).get_caller_identity()["Account"]
         != settings.account

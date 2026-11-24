@@ -6,7 +6,11 @@ import os
 import secrets
 from pathlib import Path
 from urllib.parse import quote
+from uuid import UUID
 
+from backend.identity import Decision, Status, attributes
+from backend.investigations.store import S3Store
+from infra.hosting_preflight import hosting_budget
 from infra.settings import SDK_CONFIG, Settings
 from pipelines.config import configured_snapshot, project_environment
 from pipelines.io import DataError
@@ -15,12 +19,15 @@ from pipelines.io import DataError
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("create", "disable"))
+    parser.add_argument("--hosted", action="store_true")
     args = parser.parse_args()
     env = project_environment()
     settings = Settings.load(environment=env)
     scope = f"{settings.account}/{settings.region}/{settings.project}"
     if env.get("AEGIS_AGENTCORE_APPROVAL") != f"{scope}/agentcore":
         raise DataError("scoped AgentCore approval is required")
+    if args.hosted:
+        hosting_budget(settings, env)
     session, _ = settings.identity()
     cfn = session.client("cloudformation", config=SDK_CONFIG)
 
@@ -38,13 +45,13 @@ def main() -> None:
     user_pool = client.describe_user_pool(UserPoolId=pool)["UserPool"]
     if (
         user_pool["Name"] != f"{settings.project}-operators"
-        or not user_pool["AdminCreateUserConfig"]["AllowAdminCreateUserOnly"]
+        or user_pool["AdminCreateUserConfig"]["AllowAdminCreateUserOnly"] == args.hosted
     ):
-        raise DataError("the dedicated invite-only validation pool is required")
+        raise DataError("the dedicated pool does not match the chosen validation mode")
     root = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
     folder = root / "evidence/agentcore/private"
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = folder / "fixture.json"
+    path = folder / ("hosted-fixture.json" if args.hosted else "fixture.json")
     if args.action == "disable":
         if not path.exists():
             return
@@ -62,6 +69,16 @@ def main() -> None:
     if path.exists():
         print("Scoped validation fixture already exists")
         return
+    accounts = None
+    if args.hosted:
+        lake = project_outputs("lake")
+        accounts = S3Store(
+            session.client("s3", config=SDK_CONFIG),
+            runtime["CheckpointBucket"],
+            settings.account,
+            lake["KmsKey"],
+            namespace="identity/accounts",
+        )
     users: dict[str, dict[str, str]] = {}
     try:
         for role in ("member", "peer", "foreign"):
@@ -72,16 +89,34 @@ def main() -> None:
                 Username=username,
                 TemporaryPassword=password,
                 MessageAction="SUPPRESS",
+                **(
+                    {
+                        "UserAttributes": [
+                            {"Name": "email", "Value": username + "@example.invalid"},
+                            {"Name": "email_verified", "Value": "true"},
+                        ]
+                    }
+                    if args.hosted
+                    else {}
+                ),
             )
             users[role] = {"username": username, "password": password}
             client.admin_set_user_password(
                 UserPoolId=pool, Username=username, Password=password, Permanent=True
             )
-            if role != "foreign":
+            if role != "foreign" and accounts is not None:
+                user = client.admin_get_user(UserPoolId=pool, Username=username)
+                subject = UUID(attributes(user)["sub"])
+                if not accounts.put(
+                    str(subject), Decision(status=Status.APPROVED).model_dump_json().encode(), None
+                ):
+                    raise DataError("an approved validation subject already has a decision")
+            elif role != "foreign":
                 client.admin_add_user_to_group(
                     UserPoolId=pool, Username=username, GroupName=settings.project
                 )
         record = {
+            "hosted": args.hosted,
             "pool": pool,
             "client": identity["BrowserClientId"],
             "domain": (
@@ -101,7 +136,7 @@ def main() -> None:
         for user in users.values():
             client.admin_disable_user(UserPoolId=pool, Username=user["username"])
         raise
-    print(json.dumps({"created_validation_users": len(users), "invite_only": True}))
+    print(json.dumps({"created_validation_users": len(users), "invite_only": not args.hosted}))
 
 
 if __name__ == "__main__":

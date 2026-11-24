@@ -2,10 +2,12 @@
 
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
+from typing import Any
 from urllib.parse import urlsplit
 
 import jwt
 
+from backend.identity import Account, Directory
 from backend.models import ServiceError
 
 LOCAL_ISSUER = "aegis-local"
@@ -22,6 +24,7 @@ class Auth:
         local_key: str | None = None,
         jwks_url: str | None = None,
         cognito: bool = False,
+        directory: Directory | None = None,
     ) -> None:
         if (
             not issuer
@@ -29,6 +32,7 @@ class Auth:
             or not workspace
             or bool(local_key) == bool(jwks_url)
             or (cognito and not jwks_url)
+            or (directory is not None and not cognito)
         ):
             raise ValueError("configure exactly one JWT authentication mode")
         if local_key is not None and (
@@ -44,9 +48,10 @@ class Auth:
         self.workspace = workspace
         self.local_key = local_key
         self.cognito = cognito
+        self.directory = directory
         self.jwks = jwt.PyJWKClient(jwks_url, timeout=3, lifespan=300) if jwks_url else None
 
-    def authenticate(self, authorization: str | None, client_ip: str | None) -> str:
+    def _claims(self, authorization: str | None, client_ip: str | None) -> dict[str, Any]:
         scheme, _, token = (authorization or "").partition(" ")
         if scheme.lower() != "bearer" or not token or len(token) > 8192:
             raise ServiceError("unauthorized", "a valid bearer token is required", 401)
@@ -79,6 +84,32 @@ class Auth:
             claims["token_use"] != "access" or claims["client_id"] != self.audience
         ):
             raise ServiceError("unauthorized", "invalid access token or client binding", 401)
+        subject = claims["sub"]
+        if not isinstance(subject, str) or not subject:
+            raise ServiceError("unauthorized", "invalid bearer token subject", 401)
+        return claims
+
+    def oauth_claims(self, authorization: str | None, client_ip: str | None) -> dict[str, Any]:
+        claims = self._claims(authorization, client_ip)
+        scope = claims.get("scope")
+        if not isinstance(scope, str) or "openid" not in scope.split():
+            raise ServiceError("unauthorized", "an OAuth access token is required", 401)
+        return claims
+
+    def account(self, authorization: str | None, client_ip: str | None) -> Account:
+        if self.directory is None:
+            raise ServiceError("unavailable", "account directory is unavailable", 503)
+        return self.directory.signed_in(self.oauth_claims(authorization, client_ip))
+
+    def authenticate(self, authorization: str | None, client_ip: str | None) -> str:
+        if self.directory is not None:
+            account = self.account(authorization, client_ip)
+            if not account.can_access:
+                raise ServiceError(
+                    "approval_required", "current workspace approval is required", 403
+                )
+            return str(account.subject)
+        claims = self._claims(authorization, client_ip)
         groups = claims.get("cognito:groups", [])
         allowed = (
             isinstance(groups, list) and self.workspace in groups
@@ -87,10 +118,7 @@ class Auth:
         )
         if not allowed:
             raise ServiceError("forbidden", "token is outside this workspace", 403)
-        subject = claims["sub"]
-        if not isinstance(subject, str) or not subject:
-            raise ServiceError("unauthorized", "invalid bearer token subject", 401)
-        return subject
+        return str(claims["sub"])
 
 
 def mint(

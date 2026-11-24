@@ -1,13 +1,15 @@
-"""Private Cognito directory for the explicitly authorized AEGIS runtime."""
+"""Extend the existing Cognito directory without changing its resource IDs."""
 
 from hashlib import sha256
 
 from aws_cdk import (
     App,
+    ArnFormat,
     BootstraplessSynthesizer,
     CfnCondition,
     CfnOutput,
     CfnParameter,
+    Duration,
     Environment,
     Fn,
     RemovalPolicy,
@@ -16,7 +18,11 @@ from aws_cdk import (
     Token,
 )
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as functions
+from aws_cdk import aws_logs as logs
 
+from backend.identity import ADMIN_EMAIL, ADMIN_USERNAME
 from infra.settings import Settings
 
 CALLBACK = "http://localhost:3000/auth/callback"
@@ -29,7 +35,7 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         f"{settings.project}-identity",
         env=Environment(account=settings.account, region=settings.region),
         synthesizer=BootstraplessSynthesizer(),
-        description="Invite-only AEGIS Cognito public OAuth client and workspace group.",
+        description="AEGIS Cognito registration, OAuth PKCE and administrative identity.",
     )
     for key, value in {
         "Project": "AEGIS",
@@ -40,6 +46,49 @@ def identity_stack(app: App, settings: Settings) -> Stack:
     stack.template_options.metadata = {
         "AWSToolsMetrics": {"AWSAgentToolkit": "aws-cloudformation@3"}
     }
+    existing_pool = CfnParameter(
+        stack,
+        "ExistingPoolId",
+        type="String",
+        allowed_pattern=rf"{settings.region}_[A-Za-z0-9]+",
+        description="Physical ID of the owned Cognito pool being extended.",
+    )
+    registration_log = logs.LogGroup(
+        stack,
+        "RegistrationLog",
+        retention=logs.RetentionDays.ONE_WEEK,
+    )
+    registration = functions.Function(
+        stack,
+        "RegistrationGuard",
+        code=functions.Code.from_inline(
+            "def handler(event, context):\n"
+            "    if event['triggerSource'] != 'PreSignUp_AdminCreateUser':\n"
+            "        attrs = event['request']['userAttributes']\n"
+            "        email = attrs.get('email', '').strip().casefold()\n"
+            f"        if (email == {ADMIN_EMAIL!r} or not email or "
+            f"event['userName'].strip().casefold() == {ADMIN_USERNAME!r}):\n"
+            "            raise ValueError('This registration is unavailable')\n"
+            "    return event\n"
+        ),
+        handler="index.handler",
+        runtime=functions.Runtime.PYTHON_3_12,
+        architecture=functions.Architecture.ARM_64,
+        timeout=Duration.seconds(3),
+        reserved_concurrent_executions=2,
+        log_group=registration_log,
+    )
+    registration.add_permission(
+        "CognitoRegistration",
+        principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),
+        source_account=settings.account,
+        source_arn=stack.format_arn(
+            service="cognito-idp",
+            resource="userpool",
+            resource_name=existing_pool.value_as_string,
+            arn_format=ArnFormat.SLASH_RESOURCE_NAME,
+        ),
+    )
     pool = cognito.CfnUserPool(
         stack,
         "Pool",
@@ -47,7 +96,7 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         user_pool_tier="LITE",
         deletion_protection="ACTIVE",
         admin_create_user_config=cognito.CfnUserPool.AdminCreateUserConfigProperty(
-            allow_admin_create_user_only=True
+            allow_admin_create_user_only=False
         ),
         policies=cognito.CfnUserPool.PoliciesProperty(
             password_policy=cognito.CfnUserPool.PasswordPolicyProperty(
@@ -62,9 +111,18 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         username_configuration=cognito.CfnUserPool.UsernameConfigurationProperty(
             case_sensitive=False
         ),
+        auto_verified_attributes=["email"],
+        user_attribute_update_settings=cognito.CfnUserPool.UserAttributeUpdateSettingsProperty(
+            attributes_require_verification_before_update=["email"],
+        ),
+        mfa_configuration="OPTIONAL",
+        enabled_mfas=["SOFTWARE_TOKEN_MFA"],
+        lambda_config=cognito.CfnUserPool.LambdaConfigProperty(
+            pre_sign_up=registration.function_arn
+        ),
         account_recovery_setting=cognito.CfnUserPool.AccountRecoverySettingProperty(
             recovery_mechanisms=[
-                cognito.CfnUserPool.RecoveryOptionProperty(name="admin_only", priority=1)
+                cognito.CfnUserPool.RecoveryOptionProperty(name="verified_email", priority=1)
             ]
         ),
     )
@@ -73,7 +131,7 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         "com.aws.cloudformation.Context",
         {
             "why": "Issue short-lived OAuth access tokens for the AEGIS workspace.",
-            "must": "Require administrator invitations and retain the directory.",
+            "must": "Guard reserved account registration and retain the directory.",
         },
     )
     hosted = CfnParameter(
@@ -88,6 +146,21 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         stack,
         "HasHostedOrigin",
         expression=Fn.condition_not(Fn.condition_equals(hosted.value_as_string, "")),
+    )
+    google = CfnParameter(
+        stack,
+        "EnableGoogle",
+        type="String",
+        default="no",
+        allowed_values=["yes", "no"],
+    )
+    google_enabled = CfnCondition(
+        stack,
+        "GoogleConfigured",
+        expression=Fn.condition_equals(google.value_as_string, "yes"),
+    )
+    providers = Token.as_list(
+        Fn.condition_if(google_enabled.logical_id, ["COGNITO", "Google"], ["COGNITO"])
     )
     callbacks = Token.as_list(
         Fn.condition_if(
@@ -114,8 +187,10 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         allowed_o_auth_scopes=["openid"],
         callback_ur_ls=callbacks,
         logout_ur_ls=logouts,
-        supported_identity_providers=["COGNITO"],
-        explicit_auth_flows=["ALLOW_REFRESH_TOKEN_AUTH"],
+        supported_identity_providers=providers,
+        explicit_auth_flows=["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_PASSWORD_AUTH"],
+        read_attributes=["email", "email_verified"],
+        write_attributes=["email"],
         prevent_user_existence_errors="ENABLED",
         access_token_validity=10,
         id_token_validity=10,
@@ -133,6 +208,9 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         },
     )
     cognito.CfnUserPoolGroup(stack, "Workspace", user_pool_id=pool.ref, group_name=settings.project)
+    cognito.CfnUserPoolGroup(
+        stack, "Administrators", user_pool_id=pool.ref, group_name=f"{settings.project}-admins"
+    )
     suffix = sha256(f"{settings.account}/{settings.region}".encode()).hexdigest()[:10]
     domain = cognito.CfnUserPoolDomain(
         stack,

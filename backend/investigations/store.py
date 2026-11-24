@@ -76,19 +76,32 @@ class SQLiteStore:
 class S3Store:
     """Cross-session journal using an owned KMS-encrypted bucket and S3 compare-and-set."""
 
-    def __init__(self, client: BaseClient, bucket: str, owner: str, key_id: str) -> None:
+    def __init__(
+        self,
+        client: BaseClient,
+        bucket: str,
+        owner: str,
+        key_id: str,
+        *,
+        namespace: str = "checkpoints",
+    ) -> None:
         self.client = client
         self.bucket = bucket
         self.owner = owner
         self.key_id = key_id
+        self.namespace = namespace
+
+    def object_key(self, key: str) -> str:
+        if self.namespace != "checkpoints":
+            return f"{self.namespace}/{key}.json"
+        prefix = "ledger" if key == "bedrock-spend" else "run"
+        return f"checkpoints/{prefix}/{key}.json"
 
     def get(self, key: str) -> Version | None:
         try:
             obj = self.client.get_object(
                 Bucket=self.bucket,
-                Key=f"checkpoints/ledger/{key}.json"
-                if key == "bedrock-spend"
-                else f"checkpoints/run/{key}.json",
+                Key=self.object_key(key),
                 ExpectedBucketOwner=self.owner,
             )
         except self.client.exceptions.NoSuchKey:
@@ -109,9 +122,7 @@ class S3Store:
         try:
             self.client.put_object(
                 Bucket=self.bucket,
-                Key=f"checkpoints/ledger/{key}.json"
-                if key == "bedrock-spend"
-                else f"checkpoints/run/{key}.json",
+                Key=self.object_key(key),
                 ExpectedBucketOwner=self.owner,
                 ServerSideEncryption="aws:kms",
                 SSEKMSKeyId=self.key_id,

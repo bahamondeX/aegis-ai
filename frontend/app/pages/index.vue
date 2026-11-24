@@ -62,6 +62,22 @@ const activeChips = computed(() => {
 })
 const ready = computed(() => status.value === 'ready')
 const isSignedIn = auth.authenticated
+const hasSession = auth.signedIn
+const isAdministrator = auth.administrator
+const account = auth.account
+const accountMessage = computed(() => {
+  switch (account.value?.status) {
+    case 'PENDING_APPROVAL': return ['Approval pending', 'An administrator must authorize access to your account. Check back here for a decision.']
+    case 'REJECTED': return ['Registration declined', 'An administrator declined this registration. Contact your workspace administrator if you need help.']
+    case 'SUSPENDED': return ['Access suspended', 'Your workspace access has been suspended. Contact your workspace administrator.']
+    case 'APPROVED': return ['Account verification required', 'Complete your account verification and sign in again.']
+    default: return ['Account status unavailable', 'Retry or sign out and sign in again.']
+  }
+})
+async function checkAccount() {
+  try { loginError.value = ''; await auth.refreshAccount() }
+  catch { loginError.value = 'Account status could not be refreshed. You may need to sign in again.' }
+}
 watch(filters, current => {
   cveQuery.value = (current.cve_ids ?? []).join(', ')
   countryQuery.value = current.country_iso2 ?? ''
@@ -72,10 +88,10 @@ watch(filters, current => {
   onlyKev.value = current.kev_only ?? false
 }, { immediate: true })
 
-async function handleLogin() {
+async function handleLogin(method?: 'Google' | 'signup' | 'recovery') {
   try {
     loginError.value = ''
-    if (auth.federated) await auth.signIn()
+    if (auth.federated) await auth.signIn(method)
     else { auth.acceptLocal(access.value.trim()); access.value = '' }
   } catch {
     loginError.value = 'Sign-in could not start. Check your token or try again.'
@@ -137,7 +153,8 @@ v-for="entry in nav" :key="entry.id" :href="'#' + entry.id"
       </nav>
       <div class="sidebar-footer">
         <div class="workspace-scope"><span class="status-dot" /><div><strong>AEGIS Workspace</strong><span>Development workspace</span></div></div>
-        <button v-if="isSignedIn" class="sidebar-signout" type="button" @click="auth.signOut"><LogOut :size="15" /> Sign out</button>
+        <NuxtLink v-if="isAdministrator" class="sidebar-signout" to="/admin">User administration</NuxtLink>
+        <button v-if="hasSession" class="sidebar-signout" type="button" @click="auth.signOut"><LogOut :size="15" /> Sign out</button>
       </div>
     </aside>
 
@@ -170,16 +187,33 @@ v-if="isSignedIn" type="button" class="icon-button refresh" aria-label="Refresh 
           </div>
         </div>
 
-        <section v-if="!isSignedIn" class="panel sign-in" aria-labelledby="sign-in-heading">
+        <section v-if="!hasSession" class="panel sign-in" aria-labelledby="sign-in-heading">
           <div class="icon-tile"><LockKeyhole :size="20" aria-hidden="true" /></div>
           <h2 id="sign-in-heading">Connect your workspace</h2>
-          <p>Sign in to view the active intelligence snapshot and run investigations.</p>
-          <form @submit.prevent="handleLogin">
+          <p>{{ auth.approvalRequired ? 'Sign in or request access to the threat intelligence workspace.' : 'Sign in to view the active intelligence snapshot and run investigations.' }}</p>
+          <form @submit.prevent="handleLogin()">
             <label v-if="!auth.federated"><span>Development access token</span>
               <input v-model="access" type="password" name="access" autocomplete="off" required>
             </label>
-            <UButton type="submit" class="primary-action">{{ auth.federated ? 'Continue with Cognito' : 'Connect' }}</UButton>
+            <UButton type="submit" class="primary-action">{{ auth.approvalRequired ? 'Sign in' : auth.federated ? 'Continue with Cognito' : 'Connect' }}</UButton>
           </form>
+          <div v-if="auth.approvalRequired" class="identity-actions">
+            <UButton v-if="auth.googleEnabled" variant="outline" @click="handleLogin('Google')">Continue with Google</UButton>
+            <UButton variant="outline" @click="handleLogin('signup')">Register with email</UButton>
+            <UButton variant="ghost" @click="handleLogin('recovery')">Forgot password?</UButton>
+          </div>
+          <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
+        </section>
+
+        <section v-else-if="!isSignedIn" class="panel sign-in" aria-labelledby="account-heading">
+          <div class="icon-tile"><LockKeyhole :size="20" aria-hidden="true" /></div>
+          <h2 id="account-heading">{{ accountMessage[0] }}</h2>
+          <p>{{ accountMessage[1] }}</p>
+          <p v-if="account?.email">{{ account.email }}</p>
+          <div class="identity-actions">
+            <UButton variant="outline" @click="checkAccount">Check status</UButton>
+            <UButton variant="ghost" @click="auth.signOut">Sign out</UButton>
+          </div>
           <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
         </section>
 

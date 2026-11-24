@@ -3,7 +3,7 @@
 import asyncio
 import hashlib
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -229,12 +229,23 @@ class InvestigationService:
             trace.reset(context)
 
     async def stream(
-        self, initial: Record, after: int, task: asyncio.Task[None] | None
+        self,
+        initial: Record,
+        after: int,
+        task: asyncio.Task[None] | None,
+        *,
+        access_check: Callable[[], Awaitable[bool]] | None = None,
     ) -> AsyncIterator[bytes]:
         cursor = after
-        heartbeat = asyncio.get_running_loop().time() + HEARTBEAT_SECONDS
+        loop = asyncio.get_running_loop()
+        heartbeat = loop.time() + HEARTBEAT_SECONDS
+        check_at = loop.time()
         try:
             while True:
+                if access_check is not None and loop.time() >= check_at:
+                    if not await access_check():
+                        return
+                    check_at = loop.time() + 2
                 current = await asyncio.to_thread(self.get, initial.id, initial.owner)
                 if current.status == "running" and datetime.now(UTC) > current.expires:
                     current = await asyncio.to_thread(

@@ -251,3 +251,18 @@ tbody tr:hover { background: #162636; }
 .applicability ul { margin: .55rem 0 .55rem 1rem; }
 .handoff:has(textarea:focus) textarea { scroll-margin-block: 1rem; }
 .cve-scope-chip:hover { text-decoration: underline; }
+
+.identity-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; }
+.sign-in > .identity-actions { margin-top: 1rem; }
+.admin-screen { max-width: 78rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+.admin-screen .page-heading { margin-bottom: 1.5rem; }
+.admin-kpis { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin: 1.5rem 0; }
+.admin-kpis div, .admin-directory { padding: 1rem; }
+.admin-kpis dd { margin: .3rem 0 0; font-size: 1.65rem; font-variant-numeric: tabular-nums; }
+.admin-directory { margin: 1rem 0; }
+.admin-directory h2 { margin: 0 .6rem .45rem 0; font-size: 1.1rem; font-weight: 600; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; text-align: left; }
+.admin-table th, .admin-table td { padding: .75rem .4rem; border-bottom: 1px solid rgba(150, 175, 190, .2); vertical-align: top; }
+.admin-screen small { display: block; font-weight: 400; opacity: .8; overflow-wrap: anywhere; }
+.admin-action { text-transform: capitalize; }

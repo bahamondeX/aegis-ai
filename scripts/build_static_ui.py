@@ -26,11 +26,11 @@ def main() -> None:
         raise SystemExit("Set the public Cognito issuer, client ID and domain for static hosting")
     subprocess.run(["sh", "scripts/frontend.sh", "exec", "nuxt", "generate"], cwd=ROOT, check=True)
     static = ROOT / "frontend/.output/public"
-    for relative in ("index.html", "auth/callback/index.html"):
+    for relative in ("index.html", "auth/callback/index.html", "admin/index.html"):
         content = (static / Path(relative)).read_text()
         if any(value not in content for value in config.values()):
             raise SystemExit(f"Cognito public configuration is missing from {relative}")
-    print("Static workspace and callback contain the selected public OIDC settings.")
+    print("Public OIDC configuration verified on workspace, callback and administrator pages.")
 
 
 if __name__ == "__main__":

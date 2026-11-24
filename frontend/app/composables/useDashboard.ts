@@ -75,6 +75,7 @@ export function useDashboard() {
     })
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
+        void auth.refreshAccount().catch(() => undefined)
         throw new Error('Access expired or outside this workspace. Sign in again.')
       }
       throw new Error('The selected snapshot could not be read.')
@@ -85,7 +86,7 @@ export function useDashboard() {
   async function load() {
     const token = auth.token.value
     dataRequest?.abort()
-    if (!token) {
+    if (!token || !auth.authenticated.value) {
       data.value = undefined
       status.value = 'idle'
       return
@@ -283,7 +284,7 @@ export function useDashboard() {
     }
   }
 
-  watch(auth.token, () => {
+  watch([auth.token, auth.authenticated], () => {
     investigation?.abort()
     closeDetail()
     mitigationCve.value = ''

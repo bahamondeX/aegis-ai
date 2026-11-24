@@ -58,7 +58,6 @@ synth-agent:
 
 .PHONY: deploy-agent audit-agent frontend-install lint-ui typecheck-ui build-ui smoke-ui
 deploy-agent:
-	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agent_deploy identity
 	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agent_deploy runtime
 
 audit-agent:
@@ -99,3 +98,11 @@ smoke-ui-static:
 .PHONY: eval-g7
 eval-g7:
 	@$(RUN) python -m scripts.evaluate_release
+
+.PHONY: deploy-hosting deploy-ui smoke-cloud
+deploy-hosting:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.hosting_deploy deploy
+deploy-ui:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.hosting_deploy publish-ui
+smoke-cloud:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m scripts.smoke_cloud

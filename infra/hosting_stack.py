@@ -55,6 +55,8 @@ def hosting_stack(app: App, settings: Settings, source: Path) -> Stack:
 
     lake = parameter("LakeBucket", r"[a-z0-9.-]{3,63}")
     results = parameter("ResultsBucket", r"[a-z0-9.-]{3,63}")
+    accounts = parameter("IdentityBucket", r"[a-z0-9.-]{3,63}")
+    pool = parameter("CognitoPool", rf"{settings.region}_[A-Za-z0-9]+")
     kms = parameter(
         "LakeKmsArn", rf"arn:aws:kms:{settings.region}:{settings.account}:key/[a-f0-9-]{{36}}"
     )
@@ -83,6 +85,21 @@ def hosting_stack(app: App, settings: Settings, source: Path) -> Stack:
     role = iam.Role(stack, "ApiRole", assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"))
     log.grant_write(role)
     for actions, resources, conditions in (
+        (
+            ["s3:GetObject", "s3:PutObject"],
+            [f"arn:aws:s3:::{accounts}/identity/accounts/*"],
+            {},
+        ),
+        (["s3:ListBucket"], [f"arn:aws:s3:::{accounts}"], {}),
+        (
+            [
+                "cognito-idp:AdminGetUser",
+                "cognito-idp:AdminListGroupsForUser",
+                "cognito-idp:ListUsers",
+            ],
+            [arn("cognito-idp", "userpool", pool)],
+            {},
+        ),
         (
             ["s3:GetObject"],
             [
@@ -150,6 +167,7 @@ def hosting_stack(app: App, settings: Settings, source: Path) -> Stack:
             "AEGIS_PROJECT_PREFIX": prefix,
             "AEGIS_SNAPSHOT": snapshot,
             "AEGIS_LAKE_BUCKET": lake,
+            "AEGIS_IDENTITY_BUCKET": accounts,
             "AEGIS_RESULTS_BUCKET": results,
             "AEGIS_LAKE_KMS_ARN": kms,
             "AEGIS_OIDC_ISSUER": issuer,
@@ -199,7 +217,9 @@ def hosting_stack(app: App, settings: Settings, source: Path) -> Stack:
         code=edge.FunctionCode.from_inline(
             "function handler(event) { var request = event.request; "
             "if (request.uri === '/auth/callback' || request.uri === '/auth/callback/') "
-            "request.uri = '/auth/callback/index.html'; return request; }"
+            "request.uri = '/auth/callback/index.html'; "
+            "if (request.uri === '/admin' || request.uri === '/admin/') "
+            "request.uri = '/admin/index.html'; return request; }"
         ),
     )
     response_policy = edge.ResponseHeadersPolicy(
@@ -209,6 +229,10 @@ def hosting_stack(app: App, settings: Settings, source: Path) -> Stack:
             content_type_options=edge.ResponseHeadersContentTypeOptions(override=True),
             frame_options=edge.ResponseHeadersFrameOptions(
                 frame_option=edge.HeadersFrameOption.DENY, override=True
+            ),
+            strict_transport_security=edge.ResponseHeadersStrictTransportSecurity(
+                access_control_max_age=Duration.days(365),
+                override=True,
             ),
             referrer_policy=edge.ResponseHeadersReferrerPolicy(
                 referrer_policy=edge.HeadersReferrerPolicy.NO_REFERRER,

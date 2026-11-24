@@ -45,8 +45,18 @@ def install(app: FastAPI, auth: Auth, service: InvestigationService, *, runtime:
             if new
             else None
         )
+
+        async def still_authorized() -> bool:
+            try:
+                await asyncio.to_thread(auth.authenticate, authorization, peer)
+            except ServiceError:
+                return False
+            return True
+
         return StreamingResponse(
-            service.stream(record, after, task),
+            service.stream(
+                record, after, task, access_check=still_authorized if auth.directory else None
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )

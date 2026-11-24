@@ -26,9 +26,11 @@ export default defineNuxtConfig({
       cognitoIssuer: '',
       cognitoClientId: '',
       cognitoDomain: '',
+      identityApproval: false,
+      googleEnabled: false,
     },
   },
-  nitro: { prerender: { routes: ['/', '/auth/callback'] } },
+  nitro: { prerender: { routes: ['/', '/auth/callback', '/admin'] } },
   routeRules: {
     '/api/**': { headers: { 'Cache-Control': 'no-store' } },
     '/**': { headers: {

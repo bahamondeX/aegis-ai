@@ -32,6 +32,11 @@ IDENTITY_TYPES = {
     "AWS::Cognito::UserPoolClient",
     "AWS::Cognito::UserPoolGroup",
     "AWS::Cognito::UserPoolDomain",
+    "AWS::Lambda::Function",
+    "AWS::Lambda::Permission",
+    "AWS::Logs::LogGroup",
+    "AWS::IAM::Role",
+    "AWS::IAM::Policy",
     "AWS::CDK::Metadata",
 }
 RUNTIME_TYPES = {
@@ -49,7 +54,9 @@ def tags(settings: Settings) -> dict[str, str]:
     return {"Project": "AEGIS", "Environment": "dev", "AegisScope": settings.project}
 
 
-def existing_stack(client: BaseClient, name: str, settings: Settings) -> dict[str, Any] | None:
+def existing_stack(
+    client: BaseClient, name: str, settings: Settings, *, accept_empty_review: bool = False
+) -> dict[str, Any] | None:
     try:
         stack = client.describe_stacks(StackName=name)["Stacks"][0]
     except ClientError as error:
@@ -57,6 +64,18 @@ def existing_stack(client: BaseClient, name: str, settings: Settings) -> dict[st
         if detail["Code"] == "ValidationError" and "does not exist" in detail["Message"]:
             return None
         raise
+    if (
+        accept_empty_review
+        and name == f"{settings.project}-hosting"
+        and stack["StackStatus"] == "REVIEW_IN_PROGRESS"
+        and stack["StackId"].startswith(
+            f"arn:aws:cloudformation:{settings.region}:{settings.account}:stack/{name}/"
+        )
+    ):
+        resources = client.list_stack_resources(StackName=stack["StackId"])
+        changes = client.list_change_sets(StackName=stack["StackId"])
+        if not resources["StackResourceSummaries"] and not changes["Summaries"]:
+            return None
     labels = {item["Key"]: item["Value"] for item in stack.get("Tags", [])}
     if not tags(settings).items() <= labels.items():
         raise DataError(f"{name} ownership tags differ")
@@ -80,8 +99,13 @@ def review_and_deploy(
     template: Path,
     parameters: dict[str, str],
     types: set[str],
+    *,
+    review_only: bool = False,
+    max_changes: int = 12,
 ) -> dict[str, str]:
-    current = existing_stack(client, name, settings)
+    current = existing_stack(
+        client, name, settings, accept_empty_review=name == f"{settings.project}-hosting"
+    )
     change = client.create_change_set(
         StackName=name,
         ChangeSetName=f"aegis-{uuid4().hex[:14]}",
@@ -112,7 +136,7 @@ def review_and_deploy(
     print(json.dumps({"stack": name, "changes": changes}, default=str), flush=True)
     if (
         not changes
-        or len(changes) > 12
+        or len(changes) > max_changes
         or reviewed.get("NextToken")
         or any(
             item["ResourceType"] not in types
@@ -123,6 +147,9 @@ def review_and_deploy(
     ):
         client.delete_change_set(ChangeSetName=change)
         raise DataError("change set expands the approved project scope or replaces a resource")
+    if review_only:
+        client.delete_change_set(ChangeSetName=change)
+        return outputs(current) if current else {}
     client.execute_change_set(ChangeSetName=change)
     deadline = monotonic() + 780
     while monotonic() < deadline:
@@ -167,35 +194,58 @@ def publish_image(session: boto3.Session, settings: Settings, assembly: Path, st
         return
     folder = assembly / source["directory"]
     target = f"{registry}/{repo}:{label}"
-    subprocess.run(
+    endpoint = (
+        os.environ.get("DOCKER_HOST")
+        or subprocess.check_output(
+            ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
+            text=True,
+        ).strip()
+    )
+    if not endpoint.startswith("unix://"):
+        raise DataError("expected a local Docker socket")
+    plugin = subprocess.check_output(
         [
             "docker",
-            "build",
-            "--platform",
-            "linux/arm64",
-            "--provenance=false",
-            "-f",
-            str(folder / source["dockerFile"]),
-            "-t",
-            target,
-            str(folder),
+            "info",
+            "--format",
+            '{{range .ClientInfo.Plugins}}{{if eq .Name "buildx"}}{{.Path}}{{end}}{{end}}',
         ],
-        check=True,
-        timeout=480,
-    )
-    (access,) = client.get_authorization_token(registryIds=[settings.account])["authorizationData"]
-    if access["proxyEndpoint"] != f"https://{registry}":
-        raise DataError("ECR registry endpoint differs from the verified repository")
-    username, secret = base64.b64decode(access["authorizationToken"]).split(b":", 1)
-    endpoint = subprocess.check_output(
-        ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
         text=True,
+        timeout=10,
     ).strip()
-    if username != b"AWS" or not endpoint.startswith("unix://"):
-        raise DataError("expected a local Docker socket and AWS registry credentials")
     with TemporaryDirectory(prefix="aegis-ecr-") as directory:
         env = {**os.environ, "DOCKER_CONFIG": directory, "DOCKER_HOST": endpoint}
         env.pop("DOCKER_CONTEXT", None)
+        env.pop("BUILDX_BUILDER", None)
+        if plugin and Path(plugin).is_file():
+            plugins = Path(directory) / "cli-plugins"
+            plugins.mkdir()
+            (plugins / "docker-buildx").symlink_to(Path(plugin).resolve())
+        subprocess.run(
+            [
+                "docker",
+                "build",
+                "--platform",
+                "linux/arm64",
+                "--provenance=false",
+                "-f",
+                str(folder / source["dockerFile"]),
+                "-t",
+                target,
+                str(folder),
+            ],
+            check=True,
+            env=env,
+            timeout=240,
+        )
+        (access,) = client.get_authorization_token(registryIds=[settings.account])[
+            "authorizationData"
+        ]
+        if access["proxyEndpoint"] != f"https://{registry}":
+            raise DataError("ECR registry endpoint differs from the verified repository")
+        username, secret = base64.b64decode(access["authorizationToken"]).split(b":", 1)
+        if username != b"AWS":
+            raise DataError("expected AWS registry credentials")
         subprocess.run(
             ["docker", "login", "--username", "AWS", "--password-stdin", registry],
             input=secret + b"\n",
@@ -213,6 +263,9 @@ def publish_image(session: boto3.Session, settings: Settings, assembly: Path, st
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("service", choices=("identity", "runtime"))
+    parser.add_argument("--hosted-origin")
+    parser.add_argument("--enable-google", action="store_true")
+    parser.add_argument("--review-only", action="store_true")
     args = parser.parse_args()
     environment = project_environment()
     settings = Settings.load(environment=environment)
@@ -246,6 +299,18 @@ def main() -> None:
     )
     identity_name = f"{settings.project}-identity"
     if args.service == "identity":
+        from infra.hosting_preflight import hosting_budget
+
+        hosting_budget(settings, environment)
+        if args.hosted_origin is None and not args.review_only:
+            raise DataError("provide the CloudFront origin of the owned hosting stack")
+        if args.hosted_origin:
+            hosting = existing_stack(cfn, f"{settings.project}-hosting", settings)
+            if hosting is None or outputs(hosting)["WorkspaceUrl"] != args.hosted_origin:
+                raise DataError("the origin does not match the owned hosting stack")
+        current_identity = existing_stack(cfn, identity_name, settings)
+        if current_identity is None:
+            raise DataError("the identity extension requires the existing owned pool")
         assembly = root / "identity-cdk.out"
         app = App(outdir=str(assembly))
         identity_stack(app, settings)
@@ -255,8 +320,13 @@ def main() -> None:
             identity_name,
             settings,
             assembly / f"{identity_name}.template.json",
-            {},
+            {
+                "ExistingPoolId": outputs(current_identity)["PoolId"],
+                "HostedOrigin": args.hosted_origin or "",
+                "EnableGoogle": "yes" if args.enable_google else "no",
+            },
             IDENTITY_TYPES,
+            review_only=args.review_only,
         )
         print(json.dumps({"identity_outputs": sorted(identity)}), flush=True)
         return
@@ -289,7 +359,8 @@ def main() -> None:
     )["Parameter"]["Value"]
     if not bootstrap.isdecimal() or int(bootstrap) < 6:
         raise DataError("project bootstrap version is missing or does not support assets")
-    publish_image(session, settings, assembly, name)
+    if not args.review_only:
+        publish_image(session, settings, assembly, name)
     deployed = review_and_deploy(
         cfn,
         name,
@@ -304,6 +375,7 @@ def main() -> None:
             "OidcIssuer": issuer,
             "OidcJwks": f"{issuer}/.well-known/jwks.json",
             "OidcAudience": identity["BrowserClientId"],
+            "CognitoPool": identity["PoolId"],
             "OidcWorkspace": settings.project,
             "AgentCoreApproval": f"{scope}/agentcore",
             "AgentCoreBudgetUsd": environment["AEGIS_AGENTCORE_BUDGET_USD"],
@@ -313,7 +385,10 @@ def main() -> None:
             "BedrockOutputUsdPerMillion": environment["AEGIS_BEDROCK_OUTPUT_USD_PER_MILLION"],
         },
         RUNTIME_TYPES,
+        review_only=args.review_only,
     )
+    if args.review_only:
+        return
     runtime_id = deployed["RuntimeId"]
     if not runtime_id.startswith(f"{settings.project.replace('-', '_')}_investigations-"):
         raise DataError("created runtime ID does not match the scoped resource")

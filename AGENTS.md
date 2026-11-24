@@ -75,6 +75,40 @@ of vulnerability geography. Keep the existing tool names and SSE version.
 The typed mitigation request binds the selected CVE, snapshot and evidence
 before retrieval. A handoff is an editable draft without external actions.
 
+## Identity and access management
+
+Extend the existing Cognito user pool in place. Require a reviewed live change
+set with no pool or browser-client replacement. Public native email/password
+registration and Google federation both use the Cognito OAuth Authorization
+Code flow with S256 PKCE. Require verified email, strict callback and logout
+allowlists and memory-only browser tokens. Support native confirmation,
+password recovery and logout. Do not link identities or assign privileges by
+email equivalence. Reserve the platform administrator username and email
+against both public registration paths.
+
+Ordinary accounts begin in `PENDING_APPROVAL`. Allowed decisions are
+`PENDING_APPROVAL → APPROVED/REJECTED`, `APPROVED → SUSPENDED` and
+`SUSPENDED → APPROVED`. Pending, rejected and suspended identities may read
+their own account status. Only approved users may use analytical reads, private
+evidence, MCP and investigations. API and AgentCore independently verify the
+Cognito access token and current directory/approval state, including token
+revocation and owner isolation. Use encrypted conditional records in existing
+project S3. Bind each change and its audit history atomically to the Cognito
+subject. Administrator access additionally requires the explicit current
+Cognito group and preferred TOTP MFA. Current suspension takes effect for
+existing tokens and active streams.
+
+Provision `admin@oscarbahamonde.com` through the scoped workflow. Deliver the
+Cognito invitation privately and require `NEW_PASSWORD_REQUIRED`, verified
+mailbox ownership and authenticator enrollment before activation. Existing
+credentials are never reset by a deployment. Provide a protected `/admin`
+directory with lifecycle KPIs, confirmed decisions and actor/target/UTC/outcome
+audit. The browser receives no AWS administrative credentials. Notification
+delivery is conditional on approved provider configuration and cost. Record
+real browser/API outcomes for each identity method, lifecycle decision,
+revocation, recovery, administrative guard and isolation, and disable temporary
+validation identities after testing.
+
 ## Frontend
 Nuxt 4 strict TypeScript, Nuxt UI/Tailwind compatible versions. Dark operational design, original branding, responsive panels, keyboard navigation, readable contrast, reduced motion. globe.gl for globe, MapLibre + deck.gl for tactical view (lazy-load separately to avoid duplicate WebGL contexts), Cytoscape.js bounded subgraphs, ECharts for trends and KPIs. Client-only rendering for WebGL, cleanup on unmount, resize and fallback for no GPU. Use legitimate attributed basemap and geography datasets; no fabricated arcs or blinking attacks. Display source timestamps, units, confidence, empty/error/loading states, evidence drawer, filter chips, agent activity timeline. Cap nodes and map features, aggregate by country. On M2 8 GB avoid concurrent heavy builds; browser performance measured, not invented. Use Playwright Chromium smoke and screenshots of actual running app; no screenshot substitution for tests.
 
