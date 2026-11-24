@@ -28,7 +28,7 @@ CveId = Annotated[
 Nonempty = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Score = Annotated[float, Field(ge=0, le=10, allow_inf_nan=False)]
 Source = Literal["cisa", "epss", "nvd", "shodan"]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION: Literal[1] = 1
 
 
 class KevRecord(BaseModel):

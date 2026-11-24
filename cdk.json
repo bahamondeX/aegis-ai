@@ -1,0 +1,3 @@
+{
+  "app": "uv run --locked --no-sync python -m infra.lake_stack"
+}

@@ -89,4 +89,8 @@ EPSS scores are produced by Empirical Security and maintained by the FIRST EPSS 
 
 This product uses data from the NVD API but is not endorsed or certified by the NVD.
 
-G2 begins with `make aws-preflight` after that target is implemented in the next phase.
+## G2 lakehouse
+
+The [lakehouse runbook](docs/lakehouse.md) covers local CDK synthesis, the Linux ARM64
+ingestion image, project-scoped deployment, Iceberg publication and Athena parity.
+[STATUS.md](STATUS.md) records which checks have actually run.

@@ -24,8 +24,8 @@ def load_run(folder: Path) -> Run:
 def history_files(root: Path, run: Run) -> list[Path]:
     return [
         snapshot_directory(root, run_id) / "parquet" / "fact_epss.parquet"
-        for _, run_id in sorted(run.epss_history.items())
-        if run_id != run.run_id
+        for day, run_id in sorted(run.epss_history.items())
+        if day != max(run.epss_history)
     ]
 
 
@@ -39,7 +39,14 @@ def materialize(root: Path, raw_folder: Path, output: Path, run: Run) -> dict[st
     return validate(root, output, run)
 
 
-def ingest(root: Path, env_file: Path, limit: int) -> tuple[Path, dict[str, Any]]:
+def ingest(
+    root: Path,
+    env_file: Path,
+    limit: int,
+    *,
+    daily_epss: bool = False,
+    source_keys: tuple[str | None, str | None] | None = None,
+) -> tuple[Path, dict[str, Any]]:
     root.mkdir(exist_ok=True, parents=True)
     with (root / ".ingest.lock").open("a+") as lock:
         try:
@@ -47,7 +54,9 @@ def ingest(root: Path, env_file: Path, limit: int) -> tuple[Path, dict[str, Any]
         except BlockingIOError:
             raise DataError("another ingestion holds the local writer lock") from None
         previous = load_run(selected_snapshot(root)) if (root / "latest.json").is_file() else None
-        folder, run = run_capture(root, previous, limit, env_file)
+        folder, run = run_capture(
+            root, previous, limit, env_file, daily_epss=daily_epss, source_keys=source_keys
+        )
         status = "ok" if run.nvd_found else "blocked"
         manifest: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,

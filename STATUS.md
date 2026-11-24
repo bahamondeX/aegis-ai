@@ -75,3 +75,142 @@ and ignored by Git.
 G1 has no open required blockers. Geographic exposure is conditional and remains
 unavailable. G2 is pending. Its first planned command is `make aws-preflight` after
 implementing the G2 preflight in a subsequent session.
+
+## 2026-11-24T00:23:30Z — G2 local work and AWS gate blocker
+
+Resumed from G1 commit `76360a7` and its verified snapshot
+`4e13ca6b-c2e1-4407-88bc-c362da7dbacb`. The worktree was clean at startup. G2 adds
+the Python CDK lake stack, locked ARM64 Lambda packaging, conditional EPSS capture
+reuse, PyIceberg publication, a bounded Athena engine 3 adapter and guarded AWS
+operations. Release manifests pin all eight Iceberg versions. The initial CDK
+configuration keeps the six-hour schedule disabled until the first manual cloud
+ingestion is verified.
+
+### Executed checks
+
+Wall times are from `/usr/bin/time -p`. Evidence paths below are relative to
+`data/evidence/g2/`.
+
+| Command | Exit | Wall time | Evidence |
+|---|---:|---:|---|
+| `make preflight` | 0 | 2.34 s | `preflight.log` |
+| `make bootstrap` | 0 | 0.29 s | `bootstrap.log` |
+| `make typecheck` | 0 | 0.56 s | `typecheck.log` |
+| `uv run --locked --no-sync pytest -q tests/unit` | 0 | 3.26 s | `unit.log` |
+| `make verify-phase1 SNAPSHOT=4e13ca6b-c2e1-4407-88bc-c362da7dbacb` | 0 | 12.58 s | `verify-phase1-final.log` |
+| `make synth` | 0 | 18.68 s | `synth-final.log` |
+| `make diff-local` | 0 | 16.30 s | `diff-local-final.log` |
+| `env AEGIS_SCHEDULE_ENABLED=1 AEGIS_DATA_DIR=data/evidence/g2/schedule-enabled make synth` | 0 | 28.67 s | `synth-enabled.log` |
+| `uv run --locked --no-sync python data/evidence/g2/check-assembly.py` | 0 | 1.44 s | `check-assembly.log` |
+| `env PYTHONPATH="$PWD" uv run --locked --no-sync python data/evidence/g2/replay-two-releases.py` | 0 | 7.28 s | `replay-two-releases.log` |
+| `docker buildx build --platform linux/arm64 --provenance=false --sbom=false --load --file infra/Dockerfile --tag aegis-ingest:g2 .` | 0 | 209.38 s | `image-build-b.log` |
+| `docker run --rm --platform linux/arm64 --entrypoint /var/lang/bin/python -v "$PWD/data/evidence/g2/linux-live:/tmp/aegis" aegis-ingest:g2 -m pipelines.cli --data-dir /tmp/aegis ingest --env-file /tmp/aegis/no-dotenv` | 0 | 96.83 s | `linux-live-ingest.log` |
+
+The final pinned verification passed Ruff and 27 tests, including 21 unit tests
+and six real-capture integration tests. The local Iceberg test reused all eight
+version IDs on an identical rerun, checked row counts and grain uniqueness, and
+compared six query cases with DuckDB. The two-release rehearsal used the older
+real capture `ffcdce0b-bc7f-452b-90a8-67a7f043540a` followed by the pinned snapshot.
+It interrupted publication after the EPSS table commit, confirmed the prior
+versions remained readable, and completed the new release without recommitting
+EPSS or duplicating rows. The pre-existing empty geography table produced a
+PyIceberg warning that its delete matched no records. Both releases had zero
+observations and their counts verified. The independent local Linux ingestion
+produced `a5334eda-a66c-4244-8a7e-67c305744bbf` with 1,792 real KEV entries, 411,399
+EPSS scores, 20 out of 20 NVD enrichments and zero geographic observations. Its
+raw captures and manifest are under `data/evidence/g2/linux-live/snapshots/`.
+
+The local CDK assembly is in `data/cdk.out/`. Inspection verified both schedule
+states, 18 CloudFormation resources per template, the engine 3 and 64 MiB workgroup
+settings, private and encrypted buckets, retained TLS policies, the ARM64 Lambda
+and its concurrency cap, and that the staged image context excluded credentials
+and captured data. The offline diff used an empty template as its baseline.
+
+### Failures and corrections
+
+- The first `make synth` exited 2 after a JSII child-process failure. JSII rejected
+  the shared cache because its parent directory had mode 0777. The command now
+  disables the package cache for the project subprocess. The next synthesis
+  and both final schedule variants exited 0. See `synth-a.log` and `synth-b.log`.
+- The first Mypy check reported both `settings` and `infra.settings` for the same
+  module. Added `infra/__init__.py`. The bounded project-source check then flagged
+  seven annotation issues. Corrected those and ran `make typecheck` successfully
+  over 19 source files. See `types-a.log` and `typecheck.log`.
+
+### AWS gate
+
+| Required check | Observed result |
+|---|---|
+| `make aws-preflight` | Exit 2. The operation exited 1 with `set AEGIS_AWS_ACCOUNT and AEGIS_AWS_REGION for the project`. |
+| `make diff` | Exit 2 at the same project configuration guard. Only the offline diff ran successfully. |
+| `make verify-cloud` | Exit 2 at the same guard. There are no Athena query IDs, scan timings or deployed resource IDs. |
+| Deployment, bootstrap, SecureString sync, table initialization, local snapshot publish, cloud ingestion, destroy | The corresponding Make commands each exited 2 at the target guard. No cloud writes were issued. |
+
+The AWS MCP connector's read-only STS check succeeded for an account ending in
+`6271`. The terminal had only the `default` profile configured. No explicit AEGIS
+account, region, profile or approved USD ceiling was supplied. The connector's STS
+result does not identify an authorized project deployment target. See
+`aws-preflight-guard.log`, `diff-guard.log`, `verify-cloud-guard.log` and the other
+`*-guard.log` files.
+
+**G2 remains BLOCKED.** The pending acceptance criteria are the live diff, deployment,
+Glue-backed Iceberg and seed idempotence, manual cloud ingestion, Athena/DuckDB parity,
+and verification of the deployed encryption settings and enabled scheduler. The
+[runbook](docs/lakehouse.md) records the deployment and retention sequence and an
+illustrative monthly estimate of $3.91 for N. Virginia under the stated workload.
+No deployed spend or cleanup resulted from this run. With explicit account, region,
+profile and budget authorization, resume at `make aws-preflight` and apply the
+runbook's verified ordering.
+
+## 2026-11-24T00:33:00Z — ARM64 packaging correction
+
+The Linux snapshot query with networking disabled exited 1 because DuckDB could
+not autoload ICU for its UTC setting. Packaging now installs the signed extension
+for the locked DuckDB version and loads it during the build. The image uses a
+fixed extension directory and disables runtime auto-installation.
+
+- The first packaging correction used DuckDB with a custom HTTPS repository.
+  It exited 1 because DuckDB could not bootstrap `httpfs` for that repository.
+  See `image-build-icu.log`.
+- The second attempted a direct HTTPS download from the Linux build stage. The
+  request returned HTTP 403 and the build exited 1. See `image-build-icu-b.log`.
+- The third used `INSTALL icu FROM core` and `LOAD icu`. The installation and
+  signature check completed in the image build stage. See `image-build-icu-c.log`.
+- A separate Lambda Runtime Interface Emulator check initially exceeded a 15-second
+  request timeout. A 45-second check reached the handler and confirmed it rejected
+  the invalid action. The emulator logged 17.86 seconds of local initialization.
+  See `linux-final-entrypoint.log` and `linux-entrypoint-retry.log`.
+
+Ruff and all 27 pinned-snapshot tests passed again with the extension-directory
+support in place. `make verify-phase1 SNAPSHOT=4e13ca6b-c2e1-4407-88bc-c362da7dbacb`
+exited 0 in 17.14 s and `make typecheck` exited 0 in 2.91 s. See
+`verify-phase1-icu.log` and `typecheck-icu.log`.
+
+`make synth`, `make diff-local`, enabled-schedule synthesis, and inspection of
+both updated assemblies exited 0. The times were 38.62 s, 28.97 s, 38.62 s, and
+0.57 s, respectively. See `synth-package-final.log`, `diff-package-final.log`,
+`synth-enabled-package-final.log` and `check-assembly-package-final.log`.
+
+The completed Linux ARM64 image `aegis-ingest:g2-icu` is
+`sha256:aab248505aed4fe1d991d5e92759edc308d05fa4b85a5b2375b43406bb044c0c`.
+The final command
+`docker buildx build --platform linux/arm64 --provenance=false --sbom=false --load --file infra/Dockerfile --tag aegis-ingest:g2-icu .`
+exited 0 in 355.31 s. The signed extension installation took 7.0 s in the build
+step. See `image-build-icu-c.log` and `image-inspect-icu.log`.
+
+The completed image revalidated and queried the real Linux capture with
+`docker run --rm --platform linux/arm64 --network none --entrypoint /var/lang/bin/python -v "$PWD/data/evidence/g2/linux-live:/tmp/aegis:ro" aegis-ingest:g2-icu -m pipelines.cli --data-dir /tmp/aegis query --snapshot a5334eda-a66c-4244-8a7e-67c305744bbf`.
+It exited 0 in 34.73 s, with 3,974 graph edges and zero geographic observations.
+A separate network-disabled test using `--read-only --user 10001:10001 --tmpfs /tmp`
+opened a DuckDB UTC connection and exited 0 in 7.03 s. See
+`linux-icu-query.log` and `linux-icu-readonly.log`.
+
+The first emulator call on the rebuilt image exited 1 with `Connection refused`
+before the listener was ready. After adding a bounded listener check to the
+local smoke script, `sh data/evidence/g2/smoke-entrypoint.sh aegis-ingest:g2-icu`
+exited 0 in 14.77 s. The packaged ARM64 handler received the request and rejected
+the invalid action as expected. See `linux-icu-entrypoint.log` and
+`linux-icu-entrypoint-ready.log`.
+
+The local G2 checks are complete. The last fully verified gate remains G1 while
+AWS deployment and live G2 verification await the approved project settings.

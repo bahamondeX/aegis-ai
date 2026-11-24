@@ -31,7 +31,8 @@ def cpe_product(criteria: str) -> tuple[str, str]:
     parts = CPE_PART.findall(criteria)
     if len(parts) != 13 or ":".join(parts) != criteria or parts[:2] != ["cpe", "2.3"]:
         raise DataError("nvd: malformed CPE 2.3 criterion")
-    return tuple(clean_name(re.sub(r"\\(.)", r"\1", part)) for part in parts[3:5])
+    vendor, product = (clean_name(re.sub(r"\\(.)", r"\1", part)) for part in parts[3:5])
+    return vendor, product
 
 
 def required_capture(run: Run, source: Source) -> Capture:
@@ -198,9 +199,10 @@ def normalize(root: Path, folder: Path, run: Run) -> dict[str, pa.Table]:
     epss_capture = required_capture(run, "epss")
     published, version, epss = parse_epss(read_raw(folder, epss_capture))
     score_date = published.date()
-    score_evidence = evidence_row(run.run_id, epss_capture, f"{score_date}/{version}")
+    score_run = run.epss_history[score_date]
+    score_evidence = evidence_row(score_run, epss_capture, f"{score_date}/{version}")
     evidence = [score_evidence]
-    for run_id in sorted(set(run.epss_history.values()) - {run.run_id}, key=str):
+    for run_id in sorted(set(run.epss_history.values()) - {score_run}, key=str):
         archived_folder = snapshot_directory(root, run_id)
         archived = Run.model_validate_json((archived_folder / "capture.json").read_bytes())
         evidence.append(epss_evidence(archived_folder, archived))

@@ -17,7 +17,7 @@ import polars as pl
 from dotenv import dotenv_values
 from pydantic import ValidationError
 
-from pipelines.io import DataError, capture_for, digest, snapshot_directory, write_json
+from pipelines.io import DataError, capture_for, digest, read_raw, snapshot_directory, write_json
 from pipelines.parse import parse_epss, parse_kev, parse_nvd
 from schemas.sources import Attempt, Capture, KevCatalog, Run, Source
 
@@ -44,11 +44,13 @@ PARSE_ERRORS = (DataError, ValueError, EOFError, gzip.BadGzipFile, pl.exceptions
 def credentials(path: Path) -> tuple[str | None, str | None]:
     names = ("NVD_API_KEY", "SHODAN_API_KEY")
     if all(name in os.environ for name in names) or not path.is_file():
-        return tuple(os.getenv(name) or None for name in names)
+        nvd, shodan = (os.getenv(name) or None for name in names)
+        return nvd, shodan
     if stat.S_IMODE(path.stat().st_mode) != 0o600:
         raise DataError("dotenv permissions must be 600")
     values = dotenv_values(path, interpolate=False)
-    return tuple(os.environ.get(name, values.get(name)) or None for name in names)
+    nvd, shodan = (os.environ.get(name, values.get(name)) or None for name in names)
+    return nvd, shodan
 
 
 def retry_after(value: str | None) -> float:
@@ -221,8 +223,16 @@ def check_shodan(client: httpx.Client, folder: Path, key: str | None) -> tuple[l
     )
 
 
-def run_capture(root: Path, previous: Run | None, limit: int, env_file: Path) -> tuple[Path, Run]:
-    nvd_key, shodan_key = credentials(env_file)
+def run_capture(
+    root: Path,
+    previous: Run | None,
+    limit: int,
+    env_file: Path,
+    *,
+    daily_epss: bool = False,
+    source_keys: tuple[str | None, str | None] | None = None,
+) -> tuple[Path, Run]:
+    nvd_key, shodan_key = credentials(env_file) if source_keys is None else source_keys
     started = datetime.now(UTC)
     run_id = uuid4()
     folder = snapshot_directory(root, run_id)
@@ -251,9 +261,24 @@ def run_capture(root: Path, previous: Run | None, limit: int, env_file: Path) ->
             return result
 
         kev = collect("cisa", lambda: feed("cisa", CISA, CISA_MIRROR))
-        epss = collect("epss", lambda: feed("epss", EPSS, EPSS_CURRENT))
         history = list(previous.nvd_history) if previous else []
         epss_history = dict(previous.epss_history) if previous else {}
+        reuse = epss_history.get(started.date()) if daily_epss else None
+
+        def scores_for_run() -> KevCatalog | pl.DataFrame | None:
+            if reuse is None:
+                return feed("epss", EPSS, EPSS_CURRENT)
+            original = snapshot_directory(root, reuse)
+            archived = Run.model_validate_json((original / "capture.json").read_bytes())
+            capture = capture_for(archived.captures, "epss")
+            if capture is None or capture.raw_file is None:
+                raise DataError("epss: scheduled reuse is missing its original capture")
+            body = read_raw(original, capture)
+            (folder / "raw" / capture.raw_file).write_bytes(body)
+            captures.append(capture)
+            return parse_epss(body)[2]
+
+        epss = collect("epss", scores_for_run)
         cursor = list(previous.cursor) if previous else []
         requested: list[str] = []
         found: list[str] = []
@@ -295,7 +320,7 @@ def run_capture(root: Path, previous: Run | None, limit: int, env_file: Path) ->
         shodan, shodan_status = collect("shodan", lambda: check_shodan(client, folder, shodan_key))
         captures.extend(shodan)
         epss_capture = capture_for(captures, "epss")
-        if epss_capture is not None and epss_capture.source_date is not None:
+        if reuse is None and epss_capture is not None and epss_capture.source_date is not None:
             epss_history[epss_capture.source_date.date()] = run_id
 
     result = Run(

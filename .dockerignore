@@ -1,0 +1,17 @@
+**
+!pyproject.toml
+!uv.lock
+!pipelines/
+pipelines/**
+!pipelines/*.py
+!schemas/
+schemas/**
+!schemas/*.py
+!sql/
+sql/**
+!sql/*.sql
+!infra/
+infra/**
+!infra/Dockerfile
+!infra/__init__.py
+!infra/settings.py

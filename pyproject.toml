@@ -3,6 +3,7 @@ name = "aegis-ai"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "boto3>=1.40,<2",
     "duckdb>=1.4,<2",
     "httpx>=0.28,<1",
     "polars>=1.30,<2",
@@ -15,8 +16,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18,<2",
     "pytest>=8,<10",
     "ruff>=0.11,<1",
+    "sqlalchemy>=2,<3",
+]
+infra = [
+    "aws-cdk-lib>=2.230,<3",
+    "constructs>=10,<11",
 ]
 
 [tool.pytest.ini_options]
