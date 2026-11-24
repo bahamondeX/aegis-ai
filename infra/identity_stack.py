@@ -5,11 +5,15 @@ from hashlib import sha256
 from aws_cdk import (
     App,
     BootstraplessSynthesizer,
+    CfnCondition,
     CfnOutput,
+    CfnParameter,
     Environment,
+    Fn,
     RemovalPolicy,
     Stack,
     Tags,
+    Token,
 )
 from aws_cdk import aws_cognito as cognito
 
@@ -72,6 +76,33 @@ def identity_stack(app: App, settings: Settings) -> Stack:
             "must": "Require administrator invitations and retain the directory.",
         },
     )
+    hosted = CfnParameter(
+        stack,
+        "HostedOrigin",
+        type="String",
+        default="",
+        allowed_pattern=r"(?:https://[a-z0-9]+\.cloudfront\.net)?",
+        description="Exact CloudFront origin for the separately authorized hosted pilot.",
+    )
+    has_hosted = CfnCondition(
+        stack,
+        "HasHostedOrigin",
+        expression=Fn.condition_not(Fn.condition_equals(hosted.value_as_string, "")),
+    )
+    callbacks = Token.as_list(
+        Fn.condition_if(
+            has_hosted.logical_id,
+            [CALLBACK, f"{hosted.value_as_string}/auth/callback"],
+            [CALLBACK],
+        )
+    )
+    logouts = Token.as_list(
+        Fn.condition_if(
+            has_hosted.logical_id,
+            [LOGOUT, f"{hosted.value_as_string}/"],
+            [LOGOUT],
+        )
+    )
     public_client = cognito.CfnUserPoolClient(
         stack,
         "Browser",
@@ -81,8 +112,8 @@ def identity_stack(app: App, settings: Settings) -> Stack:
         allowed_o_auth_flows=["code"],
         allowed_o_auth_flows_user_pool_client=True,
         allowed_o_auth_scopes=["openid"],
-        callback_ur_ls=[CALLBACK],
-        logout_ur_ls=[LOGOUT],
+        callback_ur_ls=callbacks,
+        logout_ur_ls=logouts,
         supported_identity_providers=["COGNITO"],
         explicit_auth_flows=["ALLOW_REFRESH_TOKEN_AUTH"],
         prevent_user_existence_errors="ENABLED",

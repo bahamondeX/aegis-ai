@@ -85,3 +85,13 @@ $(G2_TARGETS):
 .PHONY: smoke-ui-extension
 smoke-ui-extension:
 	$(RUN) python -m scripts.smoke_dashboard --evidence-dir evidence/g5-extension
+
+.PHONY: synth-hosting build-ui-static smoke-ui-static hosting-preflight
+hosting-preflight:
+	$(RUN) python -m infra.hosting_preflight
+synth-hosting:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.hosting_stack
+build-ui-static:
+	$(RUN) python -m scripts.build_static_ui
+smoke-ui-static:
+	$(RUN) python -m scripts.smoke_static_ui

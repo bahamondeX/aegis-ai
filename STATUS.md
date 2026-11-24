@@ -619,3 +619,30 @@ public-safe projection. All intelligence paths in this verification
 required authenticated workspace access.
 
 Next action is G6 local hosting validation and G7 evidence reconciliation.
+
+## 2026-11-24T05:22:05Z — G6 hosting prepared locally, cloud acceptance BLOCKED
+
+G5 extension commit `4d8c092`. The new CDK candidate prepares a private
+versioned UI bucket and CloudFront OAC plus a regional streaming REST API
+and ARM64 Lambda relay. The existing Cognito template can accept one exact
+CloudFront callback and logout origin while preserving the existing client
+ID, invite-only registration and OAuth Code flow. An AgentCore candidate
+adds read scope only to the pinned CISA archive object needed for mitigation.
+The deployed runtime and identity resources were preserved.
+
+| Command or check | Exit | Outcome and evidence |
+| --- | ---: | --- |
+| `make synth-hosting synth-agent` and local `cdk diff --template ... --no-change-set` | 0 | Hosted, identity callback and AgentCore preparation. Hosting CDK assembly in `data/hosting-cdk/`. Offline diff was against an empty template. No AWS change set created. |
+| `cfn-lint 1.60.1 --non-zero-exit-code error` with us-east-1 templates | 0 | Schema valid. W3005 remains for CDK's redundant explicit API role dependency. Synthesized invariants verified STREAM on both methods, streaming invocation URI, OAC signing, empty error TTL, logging, ARM64 and invite-only Cognito. `hosting-cfn-final.log`, `hosting-template-invariants.log`. |
+| `docker build --platform linux/arm64 --provenance=false` and network-disabled container import | 0 | Container image built locally. API import and executable Lambda Web Adapter verified inside the ARM64 image. `hosting-image.log`. |
+| `make build-ui-static` and `make smoke-ui-static` | 0 | Built with existing public Cognito metadata, workspace and callback HTML verified. Chromium checked actual static sign-in, S256 challenge initiation, invalid callback and no stored browser tokens in 2.2 s. External sign-in was intercepted. `ui-static-final.log`, `hosting-static-browser-r2.log` and inspected `static-login.png`. Initial check used the physical HTML path and reached the client router's 404; corrected to the callback route. |
+| `pytest -s -q tests/integration/test_hosting_proxy.py` on the pinned release | 0 | Real two-hop local HTTP stream reached first SSE at 9.03 ms. Active cancellation through the relay, exact replay and workspace rejection passed. `hosting-loopback.log`. |
+| AWS MCP read-only control-plane checks | Success | Exact STS account match ending 6271, us-east-1, configured prefix `aegis-dev`. Existing Cognito identity stack `CREATE_COMPLETE`. Existing scheduler `ENABLED`, `rate(6 hours)`. Existing Athena workgroup `ENABLED` with enforced 67,108,864-byte cutoff and SSE-KMS. No query or ingestion invoked. `aws-control-plane.json`. |
+| `make hosting-preflight` | 2 (expected refusal) | Separate hosting authorization is absent. The guard stopped before STS or deployment. `hosting-approval.log`. |
+
+Hosting estimate USD 0.27 for the stated bounded scenario, with lakehouse,
+AgentCore and model charges accounted separately. See `docs/hosting.md`
+for inputs, authorization, authenticated cloud smoke and rollback scope.
+No new AWS writes, billable queries or model invocations were made.
+The managed CloudFront/API Gateway/Lambda transport, callback update and
+authenticated hosted smoke remain pending separately scoped approval.

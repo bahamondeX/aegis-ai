@@ -154,6 +154,7 @@ def agent_stack(app: App, settings: Settings, source: Path) -> Stack:
                 resources=[
                     lake.arn_for_objects(f"control/releases/{snapshot}.json"),
                     lake.arn_for_objects(f"snapshots/{snapshot}/manifest.json"),
+                    lake.arn_for_objects(f"snapshots/{snapshot}/raw/00-cisa.json"),
                     lake.arn_for_objects("iceberg/*"),
                 ],
             ),

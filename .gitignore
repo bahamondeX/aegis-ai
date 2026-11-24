@@ -13,3 +13,5 @@ node_modules/
 frontend/.test-dist/
 frontend/test-results/
 frontend/playwright-report/
+
+/frontend/dist

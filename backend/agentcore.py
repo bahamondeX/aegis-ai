@@ -1,7 +1,6 @@
 """AgentCore HTTP application using the same authenticated graph and MCP reads."""
 
 import argparse
-import json
 import os
 import secrets
 from pathlib import Path
@@ -14,13 +13,12 @@ from fastapi import FastAPI
 
 from backend.api import create_app
 from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth
+from backend.cloud_reader import pinned_reader
 from backend.investigations.bedrock import make_selector, model_available, read_amount
 from backend.investigations.service import InvestigationService
 from backend.investigations.store import S3Store, SQLiteStore
 from backend.reader import SnapshotReader
-from infra.settings import SCAN_CUTOFF, SDK_CONFIG, Settings
-from pipelines.athena import AthenaReader
-from pipelines.cloud import SnapshotStore
+from infra.settings import SDK_CONFIG, Settings
 from pipelines.config import configured_snapshot, project_environment
 from pipelines.io import DataError
 
@@ -54,36 +52,10 @@ def runtime_app(environment: dict[str, str]) -> FastAPI:
     model_id = environment["BEDROCK_MODEL_ID"]
     model_available(session, model_id)
 
-    snapshot = UUID(environment["AEGIS_SNAPSHOT"])
-    s3 = session.client("s3", config=SDK_CONFIG)
-    archive = SnapshotStore(s3, environment["AEGIS_LAKE_BUCKET"])
-    release = archive.release(snapshot)
-    manifest = archive.read(f"snapshots/{snapshot}/manifest.json")
-    if release is None or manifest is None:
-        raise DataError("runtime requires a pinned, validated cloud release")
-    version = json.loads(manifest)
-    if version["status"] != "ok" or UUID(version["run_id"]) != snapshot:
-        raise DataError("release and snapshot manifest must agree")
-
-    workgroup = settings.project
-    athena = session.client("athena", config=SDK_CONFIG)
-    group = athena.get_work_group(WorkGroup=workgroup)["WorkGroup"]
-    config = group["Configuration"]
-    result = config["ResultConfiguration"]
+    reader = pinned_reader(session, settings, environment)
+    snapshot = reader.snapshot
     kms = environment["AEGIS_LAKE_KMS_ARN"]
-    if (
-        group["State"] != "ENABLED"
-        or not config.get("EnforceWorkGroupConfiguration")
-        or not 0 < config.get("BytesScannedCutoffPerQuery", 0) <= SCAN_CUTOFF
-        or result.get("OutputLocation") != f"s3://{environment['AEGIS_RESULTS_BUCKET']}/queries/"
-        or result.get("EncryptionConfiguration") != {"EncryptionOption": "SSE_KMS", "KmsKey": kms}
-    ):
-        raise DataError("runtime requires the approved encrypted, scan-capped workgroup")
-    reader = SnapshotReader.cloud(
-        AthenaReader(athena, settings.database, workgroup),
-        release,
-        geo_available=version["geometry"]["status"] == "available",
-    )
+    s3 = session.client("s3", config=SDK_CONFIG)
     store = S3Store(s3, environment["AEGIS_CHECKPOINT_BUCKET"], settings.account, kms)
     select = make_selector(session, model_id, store, ceiling, in_rate, out_rate)
     return create_app(
