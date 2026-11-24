@@ -111,3 +111,30 @@ Retention must account for every Iceberg snapshot required by a published
 release. The current Bronze worker publishes verified date receipts. Glue
 registration, Athena parity, V2 scheduling and the production pointer
 remain later acceptance steps.
+
+## Local EPSS Silver component
+
+The local PyIceberg catalog appends one accepted date at a time, sorts
+its data by CVE and validates the resulting day counts in DuckDB. The
+component stores the exact Iceberg snapshot and table identity after
+validation, alongside its verified Bronze plan. A retry can reuse a
+completed component. Queries on earlier pinned snapshots survive new
+date writes. This component does not activate a global V2 release.
+
+Reproduce the canary using a local Bronze plan whose requested members
+are all committed.
+
+```sh
+uv run --locked --no-sync python -m pipelines.v2_history \
+  --local-store data/v2-cloud-canary --warehouse data/v2-silver-canary \
+  publish --plan <verified-plan-digest>
+```
+
+For S3 Bronze inputs, the storage interface supports a version-pinned
+streaming read and verifies its bytes against the receipt. An eventual
+Silver role will need prefix-scoped `s3:GetObjectVersion`, KMS access and
+separate table-write permissions. The current EPSS Bronze Lambda role
+has no Glue or Athena write authority.
+
+[Data dictionary](data-dictionary.md) · [Temporal rules](timeseries.md) ·
+[Serving contracts](serving-contracts.md)

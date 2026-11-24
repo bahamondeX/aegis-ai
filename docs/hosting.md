@@ -160,3 +160,14 @@ remaining scoped balances before extending the validation window.
 [S3 pricing](https://aws.amazon.com/s3/pricing/) ·
 [ECR pricing](https://aws.amazon.com/ecr/pricing/) ·
 [CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/)
+
+## V2 release lane
+
+The current deployed MVP and its pinned release remain the fallback.
+The V2 worker assembly uses a separate stack with a reviewed EPSS window.
+It does not contain the existing scheduler, CloudFront or identity stack.
+Review the [V2 cloud lakehouse](v2-cloud-lakehouse.md) and [cost scopes](v2-cost-model.md)
+before any authorized canary. Cloud publication requires actual STS scope,
+object and table validation, a live change set, a tested rollback pointer
+and authenticated browser acceptance of the combined V2 release. The
+remaining MVP identity acceptance and cleanup are tracked in [STATUS](../STATUS.md).

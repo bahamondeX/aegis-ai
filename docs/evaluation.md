@@ -198,3 +198,22 @@ The local DuckDB NVD/CVE overlap query matched 431,100 IDs in 549.05 ms
 on its first connection query and 381.92 ms on repeat. The operating
 system cache was not controlled. These measurements cover local Parquet
 only. [Execution record](../STATUS.md)
+
+### V2 cloud and analytical canaries
+
+| Case | Executed evidence | Result |
+| --- | --- | --- |
+| V2-A approved scope and immutable storage | Local integration and SDK-stub contract checks. The migration dry run verified 572 unique objects. Local migration verified 130 EPSS objects and reused its manifest. | Local pass. Actual AWS object storage and the cloud canary are pending. |
+| V2-B direct provider, resume and source gaps | One actual 410,485-row EPSS date committed in local Bronze. A replay and migrated date reused committed objects. Attempt tests covered failure, retry and replay. | Local pass on the selected date and prior artifacts. Full dates pending. |
+| V2-C snapshot, model and pruning | Three pinned Silver components across eight dates. Single-CVE values matched DuckDB source files on eight observations. One queried week had five manifest-confirmed gaps. The June model transition left the daily change null. | Local pass on those samples. Athena scans and the combined V2 release remain pending. |
+
+The 1,022,253-row June component took 2.62 s to build and 533,463,040
+bytes maximum RSS. Its history query took 53.24 ms on first read and
+10.43 ms p95 across 20 repeats. The November and 2021 samples had warm
+p95 of 8.66 and 6.70 ms. The OS cache was uncontrolled. The query planner
+selected 3, 3 and 2 data files respectively, at 10,819,067, 13,005,022
+and 620,280 physical bytes. These are local file totals. Athena billed
+bytes, cold Lambda latency, cached API latency, V2 browser visualizations
+and agent grounding were not evaluated in this increment.
+
+[Time-series contract](timeseries.md) · [Execution record](../STATUS.md)

@@ -1056,3 +1056,26 @@ canary, cloud backfill, storage sizing and invoice reconciliation still
 require the matching AWS credentials and approvals. The existing production
 pointer was not modified. [Cloud architecture](docs/v2-cloud-lakehouse.md) ·
 [Cost proposal](docs/v2-cost-model.md)
+
+## 2026-11-24T13:11:30Z — V2-C local version-pinned EPSS history verified
+
+Bronze object reads can stream a specific recorded version into bounded
+scratch. The Silver component validates the source grain, writes only
+changed date partitions, reconciles per-day counts with DuckDB and publishes
+its immutable snapshot receipt. An older pinned component remained
+queryable after two later component writes.
+
+| Check | Observed result |
+| --- | --- |
+| June 14–16, 2026 | 1,022,253 rows at snapshot `7925268578926306516`, three dates, zero gaps, and the June model transition. Initial build 2.62 s and 533,463,040 bytes maximum RSS. A repeated publication reused the snapshot. |
+| November 20–22, 2026 | 1,232,653 rows at snapshot `4365043740466277137`, three dates, zero gaps. |
+| April 21–27, 2021 | 130,363 rows at snapshot `7581766664907894254`, two dated files and five actual archive gaps. |
+| DuckDB comparisons and timings | Exact single-CVE probability, percentile and model parity across eight observed sample dates. Warm p95 was 10.43, 8.66 and 6.70 ms across 20 repeats per component. First reads were 53.24, 8.75 and 7.20 ms. OS cache uncontrolled. |
+
+The first benchmark opened the SQLite catalog under a different logical
+name and returned `NoSuchTableError`. The corrected benchmark used the
+publisher's catalog identity and exited 0. Detailed results and file
+planning bytes are under `data/evidence/v2-cloud/silver-parity-timing.json`.
+The new local regression suite passed 90 Python tests. No Athena queries,
+AWS writes or model calls were executed. Gold, Glue/Athena parity, the
+API/UI rollout and V2 browser acceptance remain open.

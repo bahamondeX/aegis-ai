@@ -6,9 +6,11 @@ import os
 import re
 import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
-from typing import Protocol
+from typing import BinaryIO, Protocol
 
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
@@ -64,6 +66,24 @@ class BronzeStore(Protocol):
     def put_once(self, ref: ObjectRef, file: Path) -> bool: ...
 
     def read(self, key: str) -> bytes | None: ...
+
+    def open_object(self, ref: ObjectRef) -> AbstractContextManager[BinaryIO]: ...
+
+
+@contextmanager
+def materialized(store: BronzeStore, ref: ObjectRef) -> Iterator[Path]:
+    with tempfile.TemporaryDirectory() as scratch:
+        file = Path(scratch) / "source"
+        transferred = 0
+        with store.open_object(ref) as stream, file.open("wb") as target:
+            while chunk := stream.read(1024**2):
+                transferred += len(chunk)
+                if transferred > ref.size:
+                    raise DataError("V2 input exceeds its recorded size")
+                target.write(chunk)
+        if transferred != ref.size or file_digest(file) != ref.sha256:
+            raise DataError("V2 input differs from its committed size or checksum")
+        yield file
 
 
 def ensure(store: BronzeStore, ref: ObjectRef, file: Path) -> tuple[ObjectRef, bool]:
@@ -136,6 +156,11 @@ class LocalBronze:
         if len(raw) > RECEIPT_LIMIT:
             raise DataError("V2 control record exceeds its byte limit")
         return raw
+
+    def open_object(self, ref: ObjectRef) -> AbstractContextManager[BinaryIO]:
+        if ref.version_id is not None:
+            raise DataError("S3 version cannot be opened through the local mirror")
+        return self.path(ref.key).open("rb")
 
 
 class S3Bronze:
@@ -223,6 +248,26 @@ class S3Bronze:
         ):
             raise DataError("V2 control record failed integrity validation")
         return raw
+
+    @contextmanager
+    def open_object(self, ref: ObjectRef) -> Iterator[BinaryIO]:
+        if not ref.version_id:
+            raise DataError("V2 S3 reads require the committed object version")
+        obj = self.client.get_object(
+            **self.parameters(ref.key),
+            VersionId=ref.version_id,
+            ChecksumMode="ENABLED",
+        )
+        with obj["Body"] as body:
+            if (
+                obj["VersionId"] != ref.version_id
+                or obj["ContentLength"] != ref.size
+                or obj.get("ChecksumSHA256") != ref.checksum
+                or obj.get("ServerSideEncryption") != "aws:kms"
+                or obj.get("SSEKMSKeyId") != self.kms_key
+            ):
+                raise DataError("V2 version-pinned S3 read failed integrity checks")
+            yield body
 
 
 def refs_json(refs: list[ObjectRef]) -> list[dict]:
