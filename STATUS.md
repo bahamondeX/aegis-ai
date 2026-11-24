@@ -275,3 +275,73 @@ the guarded recovery, deploy with scheduling disabled, verify bootstrap and
 Iceberg idempotence, publish the pinned snapshot twice, perform manual ingestion,
 enable the scheduler, and verify both the pinned and latest Athena releases.
 G3 local implementation follows G2 acceptance.
+
+## 2026-11-24T01:49:43Z — Scoped recovery authorized and executed
+
+The explicit recovery authorization matched the existing STS account ending in
+`6271`, `us-east-1`, profile `default`, and USD 15 ceiling. The temporary
+recovery approval was scoped to the command. The root `.env` was kept at mode 600.
+
+- `make aws-preflight` exited 0 in 4.47 s and verified bootstrap version 34.
+- The guarded recovery initially exited 1 before deletion because Scheduler
+  included three CloudFormation-managed tags in addition to the project tags.
+  The check was tightened to require their exact stack ID, stack name and logical
+  ID. The retry revalidated the failed stack and retained key and catalog and
+  confirmed zero schedules and zero Glue tables immediately before deletion.
+- The retry removed the failed stack and empty Scheduler group. CloudFormation
+  rejected the subsequent import request because an IMPORT change set cannot
+  add tags or an execution role. The import-only retry in
+  `data/evidence/g2-resume/import_retained.py` imported exactly the existing Glue
+  database and KMS key, verified their unchanged physical IDs, and applied
+  the ownership tags and original scoped role in a separate stack update.
+  The import-only command exited 0 in 144.34 s.
+- `make synth` and live `make diff` exited 0 in 13.11 s and 13.92 s. The
+  corrected deployment began with scheduling disabled. The project parameter
+  metadata baseline contained zero parameters. No secret was overwritten.
+
+Evidence is in `data/evidence/g2-resume/`. Cloud data verification remains pending.
+
+## 2026-11-24T02:04:37Z — G2 PASS
+
+All logs are under `data/evidence/g2-resume/`. Commands used the verified STS
+target in `us-east-1` and the USD 15 authorization guard.
+
+| Check | Exit | Time | Evidence |
+|---|---:|---:|---|
+| Corrected `make deploy` with scheduling disabled | 0 | 183.73 s | `deploy-disabled.log`, `scheduler-disabled.log` |
+| Two `make init-tables` runs | 0 / 0 | 16.05 / 20.28 s | `init-first.log`, `init-second.log` |
+| Two `make publish-local` runs | 0 / 0 | 57.91 / 50.49 s | `publish-first.log`, `publish-second.log`, `seed-idempotence.log` |
+| `make ingest-cloud` | 0 | 36.25 s | `manual-ingest.log` |
+| Enable-only `make diff` and `make deploy` | 0 / 0 | 14.31 / 56.68 s | `diff-enable.log`, `deploy-enable.log` |
+| Scheduler delivery and publication | 0 | 68.39 s | `scheduler-delivery.log` |
+| Deployed IAM, Scheduler trust, KMS log encryption and preserved image | 0 | 7.15 s | `permissions.log` |
+| `make verify-cloud` | 0 | 42.72 s | `verify-pinned.log` |
+| `make verify-cloud SNAPSHOT=df7e10ce-724b-452e-93b1-3b61d77a273f` | 0 | 411.10 s | `verify-manual.log` |
+| `make verify-cloud LATEST=1` | 0 | 330.92 s | `verify-latest.log` |
+
+The pinned release `4e13ca6b-c2e1-4407-88bc-c362da7dbacb` reused the same eight
+Iceberg snapshot IDs on republish. Manual ingestion released
+`df7e10ce-724b-452e-93b1-3b61d77a273f`. After that success, only the Scheduler
+setting changed in the root `.env`. EventBridge emitted one delivery attempt
+and the Lambda log confirmed publication of scheduled release
+`9df91d1b-ae90-4cf4-81b8-32912e77b356`. All three releases compared every
+canonical table's row count and unique grains and six read results against
+DuckDB. Each had 1,792 KEV CVEs, 411,399 EPSS facts for the November 23 score
+date, and zero geographic observations. Maximum observed Athena query time
+was 4.60 s. The slower manual and scheduled checks included downloading and
+revalidating their raw and Parquet archives.
+
+The live checks verified the 64 MiB Athena cutoff, engine 3, encrypted result
+storage, released v2 metadata, and Lambda ARM64 with reserved concurrency 1.
+Role-principal simulation reported an Organizations denial that conflicted with
+the already successful worker calls. Independently simulated the complete
+deployed inline policy documents, confirmed ten expected allowed and denied
+cases, and verified the live Scheduler trust policy. The dedicated bootstrap
+and prior image digest remained in place. The original Glue database and KMS
+key were reused, and SSM metadata was unchanged. The active stack,
+workgroup, Lambda and schedule are `aegis-dev-lake`, `aegis-dev`,
+`aegis-dev-ingest` and `aegis-dev/aegis-dev-feed-refresh`. The existing
+runbook documents retention and the workload estimate. Final billed cost was
+not measured.
+
+G3 local API and MCP implementation is next.
