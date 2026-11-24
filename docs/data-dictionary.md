@@ -15,6 +15,7 @@ release. Restricted raw artifacts and operational receipts remain private.
 | Silver `fact_epss_daily` v1 | One CVE ID and score date per pinned Iceberg snapshot | `cve_id`, `score_date`, `model_version` and `epss` are required. `percentile` is nullable for source records without it. `evidence_key` identifies the private original artifact. Published query scopes must resolve associated evidence IDs under authorization. |
 | EPSS component manifest v1 | Source plan, table identity and committed normalized date versions | Iceberg snapshot ID, schema version, date interval, per-day row counts and absent dates implied by the pinned plan. Private serving metadata. |
 | Silver `fact_cve_source_capture` v1 | Official source, capture and CVE ID | Source-specific timestamps, status and enrichment-presence flags. The normalized SHA-256 resolves to original records through the staging manifest. Values from separate sources and captures are retained. |
+| Gold catalog index v1 | One CVE ID per pinned release | Sorted year shards with source presence, earliest source publication, latest source modification, and evidence availability. Source values and conflicts remain in Silver and the original captures. |
 
 The Silver canary uses Iceberg format version 2, date identity partitions,
 Zstandard compression, CVE ordering within a day and a 64 MiB file target.

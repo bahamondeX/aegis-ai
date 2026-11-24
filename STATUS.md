@@ -1289,3 +1289,21 @@ The original pinned regression passed 90 Python tests and four TS contract
 tests. A later full suite passed 87 and stopped four cases at the existing
 1 GiB disk reserve. See `final-regression-python.log`. The guarded tests
 must be repeated when space is available.
+
+## 2026-11-24T14:46Z — Year-sharded Gold catalog and typed reads verified
+
+`python -m scripts.v2_catalog_gold` published 431,133 catalog IDs to
+6,033,531 bytes of private, versioned S3 Parquet in 24.92 s wall time.
+Peak local RSS was 476,987,392 bytes. The Gold release
+`d7fde9f1fd0e014332c36d843132e33c5036a719b66ed3c394b75e00acb80505`
+is pinned to the verified Silver snapshot. The latest year shard contains
+96,631 CVEs. Individual captures remain available for source-specific values.
+
+Authenticated loopback REST `/v2/catalog` and MCP `get_catalog` served
+this AWS data. Verified stable cursor paging, exact-CVE lookup, invalid
+filter and role rejection, and anonymous and foreign-workspace denial.
+Observed local HTTP latency was 770.07 ms for the first 2026 shard read.
+Twenty warm reads had 2.14 ms median and 2.84 ms p95. The request path avoids
+Athena statements. Evidence is `data/evidence/v2-activation/{catalog-gold,
+catalog-api-verification}.json`. Hosted rollout and comprehensive profiles
+remain open.

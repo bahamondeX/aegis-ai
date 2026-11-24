@@ -29,6 +29,7 @@ from backend.investigations.contracts import CancelRequest
 from backend.investigations.contracts import Request as Investigation
 from backend.models import ServiceError
 from backend.reader import SnapshotReader
+from backend.v2_catalog import CatalogReader
 from backend.v2_network import NetworkContextReader
 from infra.settings import SDK_CONFIG, Settings
 from pipelines.bronze import S3Bronze
@@ -66,9 +67,9 @@ def runtime_url(value: str, settings: Settings) -> str:
 class GatewayPaths:
     """Expose only the shared frontend API routes and local adapter readiness."""
 
-    def __init__(self, app: ASGIApp, network_enabled: bool = False) -> None:
+    def __init__(self, app: ASGIApp, v2_reads: frozenset[str] = frozenset()) -> None:
         self.app = app
-        self.network_enabled = network_enabled
+        self.v2_reads = v2_reads
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -80,11 +81,7 @@ class GatewayPaths:
             await Response(status_code=204)(scope, receive, send)
             return
         route = path.removeprefix(PREFIX)
-        read = (
-            READS.fullmatch(route)
-            or ACCOUNT.fullmatch(route)
-            or (self.network_enabled and route == "/v2/network")
-        )
+        read = READS.fullmatch(route) or ACCOUNT.fullmatch(route) or route in self.v2_reads
         allowed = (method == "GET" and read) or (
             method == "POST"
             and (
@@ -114,9 +111,13 @@ def gateway(
     client: httpx.AsyncClient,
     *,
     network: Callable[[], NetworkContextReader] | None = None,
+    catalog: Callable[[], CatalogReader] | None = None,
 ) -> FastAPI:
-    app = create_app(reader, auth, network=network)
-    app.add_middleware(GatewayPaths, network_enabled=network is not None)
+    app = create_app(reader, auth, network=network, catalog=catalog)
+    reads = frozenset(
+        path for path, loader in (("/v2/network", network), ("/v2/catalog", catalog)) if loader
+    )
+    app.add_middleware(GatewayPaths, v2_reads=reads)
     install_identity(app, auth)
 
     async def relay(request: Request, payload: Investigation | CancelRequest) -> Response:
@@ -279,29 +280,53 @@ def main() -> None:
 
     client = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(12))
     network_release = env.get("AEGIS_V2_NETWORK_RELEASE")
+    catalog_component = env.get("AEGIS_V2_CATALOG_COMPONENT")
+    catalog_release = env.get("AEGIS_V2_CATALOG_RELEASE")
+    if bool(catalog_component) != bool(catalog_release):
+        raise DataError("hosted catalog requires both the component and serving release digests")
+
+    @cache
+    def bronze() -> S3Bronze:
+        load_snapshot()
+        return S3Bronze(
+            session.client("s3", config=SDK_CONFIG),
+            env["AEGIS_LAKE_BUCKET"],
+            settings.account,
+            env["AEGIS_LAKE_KMS_ARN"],
+        )
 
     @cache
     def load_network() -> NetworkContextReader:
-        load_snapshot()
         if not network_release:
             raise ServiceError("release_unavailable", "Network context is unavailable", 503)
         try:
-            store = S3Bronze(
-                session.client("s3", config=SDK_CONFIG),
-                env["AEGIS_LAKE_BUCKET"],
-                settings.account,
-                env["AEGIS_LAKE_KMS_ARN"],
-            )
-            return NetworkContextReader.load(store, network_release)
+            return NetworkContextReader.load(bronze(), network_release)
         except Exception as error:
             LOG.error("Network release initialization failed: %s", type(error).__name__)
             raise ServiceError(
                 "release_unavailable", "The pinned network release is unavailable", 503
             ) from error
 
+    @cache
+    def load_catalog() -> CatalogReader:
+        if not catalog_release or not catalog_component:
+            raise ServiceError("release_unavailable", "The catalog release is unavailable", 503)
+        try:
+            return CatalogReader(bronze(), catalog_component, catalog_release)
+        except Exception as error:
+            LOG.error("Catalog release initialization failed: %s", type(error).__name__)
+            raise ServiceError(
+                "release_unavailable", "The pinned catalog release is unavailable", 503
+            ) from error
+
     uvicorn.run(
         gateway(
-            load_snapshot, auth, upstream, client, network=load_network if network_release else None
+            load_snapshot,
+            auth,
+            upstream,
+            client,
+            network=load_network if network_release else None,
+            catalog=load_catalog if catalog_release else None,
         ),
         host="0.0.0.0",
         port=8080,

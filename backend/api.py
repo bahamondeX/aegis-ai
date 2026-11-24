@@ -36,6 +36,7 @@ from backend.models import (
     Vulnerability,
 )
 from backend.reader import SnapshotReader
+from backend.v2_catalog import CatalogFilters, CatalogPage, CatalogReader
 from backend.v2_network import NetworkContextReader, NetworkYear, WdiAlpha2
 
 if TYPE_CHECKING:
@@ -68,6 +69,7 @@ def create_app(
     *,
     runtime: bool = False,
     network: NetworkContextReader | Callable[[], NetworkContextReader] | None = None,
+    catalog: CatalogReader | Callable[[], CatalogReader] | None = None,
 ) -> FastAPI:
     def snapshot_reader() -> SnapshotReader:
         return reader() if callable(reader) else reader
@@ -78,6 +80,22 @@ def create_app(
         if network is None:
             raise ServiceError("release_unavailable", "Network context is unavailable", 503)
         return network() if callable(network) else network
+
+    def catalog_page(filters: CatalogFilters | None) -> CatalogPage:
+        if catalog is None:
+            raise ServiceError("release_unavailable", "The catalog release is unavailable", 503)
+        current = catalog() if callable(catalog) else catalog
+        selection = filters or CatalogFilters()
+        return current.page(
+            selection.year, limit=selection.limit, after=selection.after, cve_id=selection.cve_id
+        )
+
+    if catalog is not None:
+
+        @mcp.tool()
+        async def get_catalog(filters: CatalogFilters | None = None) -> CatalogPage:
+            """Read a bounded page from the verified official vulnerability catalog."""
+            return await mcp_result(lambda: catalog_page(filters))
 
     if network is not None:
 
@@ -219,8 +237,14 @@ def create_app(
         return snapshot_reader().evidence(evidence_id)
 
     app.include_router(routes)
+    v2 = APIRouter(prefix="/v2", dependencies=[Depends(authenticate)])
+    if catalog is not None:
+
+        @v2.get("/catalog")
+        def official_catalog(filters: Annotated[CatalogFilters, Query()]) -> CatalogPage:
+            return catalog_page(filters)
+
     if network is not None:
-        v2 = APIRouter(prefix="/v2", dependencies=[Depends(authenticate)])
 
         @v2.get("/network")
         def annual_network_context(
@@ -229,7 +253,7 @@ def create_app(
         ) -> NetworkYear:
             return network_reader().year(year, country_alpha2)
 
-        app.include_router(v2)
+    app.include_router(v2)
     if investigations is not None:
         from backend.investigations.routes import install
 

@@ -1,5 +1,21 @@
 # V2 analytical serving contracts
 
+## Verified staged reads
+
+The authenticated `/v2/catalog` route and `get_catalog` MCP tool read a
+release-pinned, year-sharded mart in S3. Filters accept a catalog year,
+exact CVE ID or stable cursor within a year, with a maximum of 100 rows.
+The response includes the Silver snapshot as an opaque string. The catalog
+summarizes source presence and coverage flags. See source-grain Silver for
+values that disagree across captures.
+
+The authenticated `/v2/network` route and `get_global_network_context` MCP
+tool read one annual WDI/ITU observation per economy. Each response carries
+the release, year, unit, source publication and applicable denominator.
+Provider codes retain a nullable canonical geometry identifier. Missing
+values remain null and measured zero stays explicit. These metrics describe
+subscriptions and remain independent of CVE geography.
+
 The implemented local canary exposes a version-pinned EPSS history read
 through the CLI. Bronze and Silver receipts remain operator-scoped. The
 existing deployed API and its eight-table release continue using the
