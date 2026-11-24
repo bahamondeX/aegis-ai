@@ -15,17 +15,27 @@ and the Canadian CRTC network-context companion. The current NVD runner
 requests up to 20 KEV records per capture. Its data contracts and published
 snapshot remain usable while new source-grain tables are developed.
 
-| Milestone | Depends on | Acceptance evidence | Status |
+| Increment | Depends on | Acceptance evidence | Status |
 | --- | --- | --- | --- |
-| V2.1 Official vulnerability corpus | Pinned baseline and qualified source manifests | All accessible KEV, NVD year feeds and CVE List V5 members counted and reconciled. Preserve source documents, invalid and duplicate counts, CVE overlap, missing enrichments, KEV revision history, resumable deltas, and EPSS availability by date and model. | Local KEV, NVD and CVE Program baseline and synchronization verified. Current EPSS and 43 historical dates verified. Complete EPSS normalization needs a larger volume. |
-| V2.2 Global network intelligence | A versioned country dimension and per-provider rights review | Preserve CRTC. Qualify RIR delegated data, IANA and RIPEstat, then CAIDA, PeeringDB, ITU and UN SDG, Cloudflare Radar and regulator data. Count at least 150 distinct supported countries or territories across qualified metrics. Record ASN registration and documented operational geography independently. | Local WDI/ITU coverage target met for the subscription indicator. The NRO audit verified coarse registration data across all five RIRs and 240 reported codes. Public terms and additional indicators remain in review. |
-| V2.3 Shodan aggregate evidence | Scoped existing account, provider limits and reuse review | Document actual entitlement and coverage denominator. Cache only permitted coarse aggregate results. Compare authorized research exports and public alternatives when entitlement is limited. Record unavailable scope. | Account and field metadata verified. The `oss` plan did not meet the confirmed free-plan guard. Aggregate and redistribution entitlement remain unverified. |
-| V2.4 Geographic reference layers | V2.2 and qualified association or exposure evidence | Blue network context, dashed or hatched purple inferred associations, amber observed exposure and isolated private verified sites. Require dual provenance for inference, label geographic basis, show confidence and methodology, and test unavailable versus measured zero. | Planned. CVE geography remains unavailable in production. |
-| V2.5 Lakehouse expansion | Measured V2.1 and V2.2 workloads, V2.4 evidence grains, AWS approval | Reuse current Iceberg schemas where compatible. Verify incremental merges, manifest-last recovery, bounded Athena parity, partition pruning, file sizing, compaction and retention. Measure scheduler and Lambda continuation bounds before enabling them. | Planned. |
-| V2.6 Knowledge graph and rankings | V2.1 and V2.5 | Trace CVE, CWE, CPE, applicability, KEV, EPSS, CVSS, SSVC and mitigation links to source evidence. Exercise paged graph filters. Validate independent ranking views for each metric. | Planned. |
-| V2.7 Agent and MCP | V2.4 through V2.6 and existing authorization | Extend the four-node graph with typed reads. Measure at least 95% grounded claims with an explicit denominator. Verify source distinction, affected versions, evidence quality, manufacturer remediation, replay, cancellation and access isolation. | Planned. |
-| V2.8 Command center | Stable typed API across V2.5 through V2.7 | Verify catalog paging, historical charts, worldwide context and coverage, independent layers, explainable methodology, graph exploration, responsive layouts and real browser performance. Preserve the design system. | Planned. |
-| V2.9 Private organizational risk | V2.5 and explicit operator approval | Optional CycloneDX or SPDX ingestion with encrypted, isolated data and applicability checks. Potential product matches remain distinct from confirmed affected assets. | Optional. |
+| V2-A Cloud ingestion foundation | Verified local V2 artifacts and existing project ownership | Immutable Bronze keys, verified object checksums and versions, exact-scope approval, durable attempt receipts, resumable migration and a direct worker canary. | Local migration and EPSS worker canary verified. Offline worker assembly prepared. AWS activation pending. |
+| V2-B Historical data platform | V2-A plus scoped AWS authorization | Existing corpus migrates without redownload. Reconcile the archive, valid dates, absent dates and remediated failures. Size CPE Dictionary and CPE Match independently. | Official vulnerability baseline verified locally. 43 EPSS dates plus one separate local Bronze canary. Full cloud backfill pending. |
+| V2-C Iceberg and analytical marts | Versioned, committed Bronze inputs | Use source-grain facts and release-pinned Gold. Measure DuckDB/Athena parity, history, scan bytes, cache and publication recovery. | Planned. |
+| V2-D Geographic intelligence | V2-C for serving and approved source provenance | Serve WDI/ITU and CRTC separately. RIR registration is distinct from operating location. Conditional inferred/observed layers require qualified evidence. | Global local context verified. Public rights and geography layers remain qualified separately. |
+| V2-E Interactive globe | Bounded geography contracts | Verify zoom, rotation, fullscreen, accessible resize and aggregate selection in Chromium. | Planned. |
+| V2-F CVE intelligence overlay | V2-C profile and evidence contract | Reuse one profile from map, graph, ranking, timeline and investigation. Verify bounded provenance and mitigation workflows. | Planned. |
+| V2-G Temporal command center | V2-C analytical dates and V2-E interactions | Verify model transitions, missing periods, source granularity, comparison and historical globe synchronization. | Planned. |
+| V2-H Agentic analytics | Typed read-only serving contracts | Extend the four-node graph and typed UI commands with a measured 95% grounding threshold and authorized read isolation. | Planned. |
+| V2-I Production release | Applicable authorization and V2-A through H gates | Record AWS resources and costs, canary tests, rollback, browser screenshots, latency and privacy checks. | Pending. |
+| V2-J Private organizational intelligence | Separate scope and user-authorized inventory | Optional CycloneDX or SPDX ingestion with encrypted data and explicit applicability evidence. | Optional. |
+
+The first serving checkpoint is an EPSS history projection built from
+committed date receipts. Frontend dependencies follow bounded serving
+contracts and measured source availability. Shodan's observed `oss` plan
+and zero credits remain recorded. Positive CVE geography needs a qualifying
+source and is independent of pipeline implementation.
+
+[Cloud ingestion architecture](docs/v2-cloud-lakehouse.md) ·
+[Cloud cost proposal](docs/v2-cost-model.md)
 
 ## V2.1 local increments
 

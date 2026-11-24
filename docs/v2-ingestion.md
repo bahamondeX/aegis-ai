@@ -149,3 +149,11 @@ workload before deploying. Cloud read parity, compaction and scan
 measurements are V2.5 acceptance cases.
 [S3 pricing](https://aws.amazon.com/s3/pricing/) ·
 [Athena pricing](https://aws.amazon.com/athena/pricing/)
+
+## V2 Bronze migration and worker
+
+Use the [cloud lakehouse runbook](v2-cloud-lakehouse.md) to start a
+checksum-verified inventory. The default is a dry run. A local storage
+destination can exercise the migration and daily job protocol without AWS.
+The [V2 cost proposal](v2-cost-model.md) bounds the first AWS canary and the
+separate full backfill and monthly scenarios.

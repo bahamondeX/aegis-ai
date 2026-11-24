@@ -1031,3 +1031,28 @@ remain local pending the V2 release. CVE geographic exposure
 and inferred network associations still require qualified source evidence.
 The full EPSS history needs a larger volume. Expanded Iceberg publication
 and hosted acceptance require separately scoped cloud authorization.
+
+## 2026-11-24T13:03:29Z — V2-A Bronze migration and direct ingestion canary verified locally
+
+Recovered 320cdbb, cbc389a and 78afcb1. G1–G5 remain closed. The combined
+hosted smoke evidence and the remaining G6/G7 decision, private checks and
+validation-account cleanup are unchanged in the execution record. The AWS
+connector identified a different account from the project pin. The
+configured project profile returned `LoginRefreshRequired`; live ownership
+and current paid usage were unavailable. No AWS writes were attempted.
+
+| Check | Exit | Evidence under `data/evidence/v2-cloud/` |
+| --- | --- | --- |
+| Full dry-run inventory with local checksum and count checks | 0 | `migration-inventory.json`. 572 distinct objects and 1,926,772,199 bytes across six source groups. 6.32 s wall, 121,585,664 bytes maximum RSS. |
+| Local EPSS migration and replay | 0 | `migration-local.json`, `migration-local-replay.json`. 130 objects and 43 upstream-matched date aliases committed. Replay reused the verified manifest. 1.64 s initial wall, 152,993,792 bytes maximum RSS. |
+| Real provider EPSS worker on 2026-11-20 | 0 | `worker-local.json`. 410,485 source rows, zero rejected or duplicate. 7,749,123 combined raw and Parquet bytes, 3.12 s process wall, 225,476,608 bytes maximum RSS. |
+| Same-day replay and migrated-date reuse | 0 | `worker-local-replay.json`, `worker-local-migrated-date.json`. Both found verified artifacts before the download branch. |
+| Offline CDK assembly | 0 | `canary-synth.log` and `data/v2-cloud-cdk/`. A pinned plan parameter, one concurrency slot, 120 s, 1 GiB memory and 2 GiB scratch. No scheduler resources. |
+| `make lint typecheck test` | 0 | `foundation-regression.log`. 88 Python tests including the prior regressions, conditional S3 contracts, local integrity and retry checks. |
+
+The review proposes USD 2 for the initial canary within a USD 15 one-time
+scope, plus a separate USD 10 monthly pilot. These are proposals. The live
+canary, cloud backfill, storage sizing and invoice reconciliation still
+require the matching AWS credentials and approvals. The existing production
+pointer was not modified. [Cloud architecture](docs/v2-cloud-lakehouse.md) ·
+[Cost proposal](docs/v2-cost-model.md)

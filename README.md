@@ -66,6 +66,8 @@ ingest live feeds to create a new local snapshot and ID.
 The V2 local ingestion command archives the complete pinned KEV, NVD and
 CVE Program source corpora alongside the MVP release. See the
 [V2 roadmap](ROADMAP_V2.md) and [bulk data runbook](docs/v2-ingestion.md).
+The [cloud lakehouse runbook](docs/v2-cloud-lakehouse.md) covers the verified
+local Bronze protocol and the proposed [AWS cost scopes](docs/v2-cost-model.md).
 
 - The enrichment cursor ranks unvisited KEV CVEs by catalog addition date, EPSS and CVE ID.
   It rotates after the cohort is exhausted and carries forward earlier NVD enrichment by
