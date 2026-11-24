@@ -848,3 +848,16 @@ The public Chromium smoke passed one hosted HTTPS and unauthorized-access
 case in 10.9 seconds. Cognito confirmed the owner's email verification at
 2026-11-24T07:49:45Z. TOTP enrollment and application activation remained
 pending at the next read.
+
+### Authenticator challenge follow-up
+
+Cognito CloudTrail recorded successful email verification and TOTP key
+association, followed by `VerifySoftwareToken` returning
+`EnableSoftwareTokenMFAException` with `Code mismatch` at 07:50:47 UTC.
+The command now offers three verification attempts against the same TOTP
+enrollment key and only applies the preferred factor after Cognito reports
+success. The final authorization regression passed all 72 tests
+(`data/evidence/admin-recovery/authorization-totp.log`). At 07:54:39 UTC
+Cognito still showed verified email and no enrolled or preferred factor.
+No application approval was written by the operator outside the private
+onboarding flow.

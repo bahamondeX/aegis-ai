@@ -77,6 +77,23 @@ def verify_admin_email(client, access: str) -> None:
             print("The code expired. Cognito sent a new verification email.")
 
 
+def verify_admin_totp(client, access: str) -> None:
+    for attempt in range(3):
+        try:
+            result = client.verify_software_token(
+                AccessToken=access,
+                UserCode=getpass("Current six-digit code from your authenticator: ").strip(),
+            )
+            if result.get("Status") == "SUCCESS":
+                return
+        except client.exceptions.EnableSoftwareTokenMFAException:
+            if attempt == 2:
+                raise
+        if attempt < 2:
+            print("Check the authenticator entry for this setup and try its next code.")
+    raise DataError("Cognito could not verify the authenticator")
+
+
 def main() -> None:
     from infra.agent_deploy import existing_stack, outputs
 
@@ -196,10 +213,8 @@ def main() -> None:
                     f"Add this authenticator URI privately, then clear terminal scrollback:\n{uri}",
                     file=terminal,
                 )
-            client.verify_software_token(
-                AccessToken=access,
-                UserCode=getpass("Code from your authenticator: "),
-            )
+            print("For manual setup, use the URI's secret value as the time-based setup key.")
+            verify_admin_totp(client, access)
         client.set_user_mfa_preference(
             AccessToken=access,
             SoftwareTokenMfaSettings={"Enabled": True, "PreferredMfa": True},

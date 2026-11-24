@@ -14,7 +14,7 @@ from backend.cloud_api import gateway
 from backend.identity import ADMIN_EMAIL, ADMIN_USERNAME, Decision, Directory, Status
 from backend.investigations.store import SQLiteStore
 from pipelines.io import DataError
-from scripts.platform_admin import activate_verified_admin, verify_admin_email
+from scripts.platform_admin import activate_verified_admin, verify_admin_email, verify_admin_totp
 
 
 def test_lifecycle_uses_current_state_and_isolates_principals(tmp_path, monkeypatch):
@@ -223,4 +223,18 @@ def test_admin_email_mismatch_retries_without_sending_new_code(monkeypatch):
     monkeypatch.setattr("scripts.platform_admin.getpass", lambda _: "000000")
     verify_admin_email(client, "local-test-token")
     assert client.sent == 1
+    assert client.attempts == 2
+
+
+def test_admin_authenticator_retries_using_same_enrollment(monkeypatch):
+    class Cognito:
+        attempts = 0
+
+        def verify_software_token(self, **_):
+            self.attempts += 1
+            return {"Status": "ERROR" if self.attempts == 1 else "SUCCESS"}
+
+    client = Cognito()
+    monkeypatch.setattr("scripts.platform_admin.getpass", lambda _: "000000")
+    verify_admin_totp(client, "local-test-token")
     assert client.attempts == 2
