@@ -1307,3 +1307,36 @@ Twenty warm reads had 2.14 ms median and 2.84 ms p95. The request path avoids
 Athena statements. Evidence is `data/evidence/v2-activation/{catalog-gold,
 catalog-api-verification}.json`. Hosted rollout and comprehensive profiles
 remain open.
+
+## 2026-11-24T14:54Z — Staged browser journeys and identity cleanup verified
+
+Chromium verified annual WDI observations from the genuine S3 release, a
+country filter, the retained globe camera, year switching, independent
+layer toggles, and unavailable CVE geography. The successful network test
+ran in 6.2 s. A first run found the static build flag missing. A second
+identified an ambiguous zoom locator. The corrected browser test uses the
+built feature flag and the globe control group.
+
+The catalog browser accepted 431,133 official IDs via query, verified
+bounded paging in both directions and inspected the source overview for
+CVE-2024-3400. The run took 6.5 s. An earlier catalog launcher selected the
+legacy suite. The corrected launcher ran the dedicated catalog test.
+Both Chrome runs used an authenticated loopback server and the staged
+AWS release. Actual screenshots are under
+`data/evidence/v2-activation/{ui-network,ui-catalog}/`. Frontend commits on
+`v2-ui-activation-20261124` are `7a2dfcb`, `4e7bb87` and `a8ba142`.
+
+Fresh STS access allowed read-only identity checks in the existing pool.
+The permanent native administrator is enabled, approved, confirmed, email
+verified, in the required administrator group, and uses preferred TOTP.
+The live directory found one identity for the reserved email. No admin
+settings changed. `python -m scripts.agent_identity_fixture disable --hosted`
+matched creation IDs and Cognito subjects and verified all three obsolete
+hosted smoke identities disabled. The cleanup receipt is mode 600 and
+contains redacted subject references and AWS request IDs. The separate
+mailbox validation reservation remains available for its unverified flow.
+
+G6/G7 still require hosted administrator lifecycle exercises, native
+confirmation and recovery, and a completed Google federation flow.
+The prior AWS session blocker for the three hosted identities is resolved.
+See `data/evidence/v2-activation/identity-{reconciliation,fixture-cleanup}.*`.
