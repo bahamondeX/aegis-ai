@@ -217,3 +217,10 @@ bytes, cold Lambda latency, cached API latency, V2 browser visualizations
 and agent grounding were not evaluated in this increment.
 
 [Time-series contract](timeseries.md) · [Execution record](../STATUS.md)
+
+The first EPSS Gold projection materialized three daily rows in 3,002
+bytes from 1,022,253 Bronze observations. An independent DuckDB read of the
+original Parquet matched its counts and probability statistics. Initial
+build time was 2.66 s with 305,627,136 bytes maximum RSS. The local
+projection read took 1.121 ms first and 0.824 ms p95 over 20 repetitions
+with uncontrolled OS cache. Replay reused the identical file digest.

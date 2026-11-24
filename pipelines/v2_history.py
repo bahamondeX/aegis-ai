@@ -1,8 +1,10 @@
 """Build and read a version-pinned EPSS Iceberg component for the V2 canary."""
 
 import argparse
+import fcntl
 import json
 import statistics
+import tempfile
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -30,8 +32,8 @@ from pipelines.bronze import (
 )
 from pipelines.bulk_epss import SCHEMA as BRONZE_SCHEMA
 from pipelines.bulk_vulnerabilities import RECORD_ID
-from pipelines.epss_bronze import plan_id, plan_key, verified_date
-from pipelines.io import DataError
+from pipelines.epss_bronze import HEX, plan_id, plan_key, verified_date
+from pipelines.io import DataError, file_digest, write_json
 
 NAME = "fact_epss_daily"
 NAMESPACE = "aegis_v2_pilot"
@@ -69,6 +71,8 @@ def init_table(catalog: Catalog, warehouse: str) -> Table:
 
 
 def component_key(identity: str) -> str:
+    if not HEX.fullmatch(identity):
+        raise DataError("invalid EPSS component digest")
     return f"{PREFIX}/manifests/epss-components/{identity}.json"
 
 
@@ -254,6 +258,82 @@ def history(table: Table, release: dict, cve: str, start: date, end: date) -> di
     }
 
 
+def publish_daily_rollup(table: Table, release: dict, root: Path) -> dict:
+    """A materialized EPSS projection for the global daily risk mart."""
+    if (
+        str(table.metadata.table_uuid) != release["table_uuid"]
+        or table.snapshot_by_id(release["snapshot_id"]) is None
+    ):
+        raise DataError("EPSS rollup source snapshot is unavailable")
+    identity = release["component"]
+    if not HEX.fullmatch(identity):
+        raise DataError("invalid EPSS component digest")
+    folder = root / "gold" / "epss_daily" / identity
+    folder.mkdir(parents=True, exist_ok=True)
+    with (folder / ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return write_daily_rollup(table, release, folder)
+
+
+def write_daily_rollup(table: Table, release: dict, folder: Path) -> dict:
+    data = folder / "daily.parquet"
+    manifest = folder / "manifest.json"
+    if manifest.is_file():
+        prior = json.loads(manifest.read_bytes())
+        if data.stat().st_size != prior["bytes"] or file_digest(data) != prior["sha256"]:
+            raise DataError("committed EPSS Gold projection differs from its checksum")
+        return {**prior, "reused": True}
+
+    rows = []
+    with duckdb.connect(config={"threads": "2", "memory_limit": "256MB"}) as db:
+        for day, count in sorted(release["days"].items()):
+            scan = table.scan(
+                snapshot_id=release["snapshot_id"],
+                row_filter=EqualTo("score_date", date.fromisoformat(day)),
+                selected_fields=("model_version", "epss", "percentile"),
+            )
+            db.register("scores", scan.to_arrow_batch_reader())
+            result = db.sql("""
+                SELECT min(model_version), count(DISTINCT model_version), count(*),
+                       count_if(percentile IS NULL), count_if(epss >= 0.95),
+                       avg(epss), quantile_cont(epss, 0.5), quantile_cont(epss, 0.95)
+                FROM scores
+            """).fetchone()
+            db.unregister("scores")
+            if result is None or result[1] != 1 or result[2] != count:
+                raise DataError("EPSS rollup does not reconcile with the pinned daily denominator")
+            version, _, observed, missing, high, mean, median, p95 = result
+            rows.append(
+                {
+                    "score_date": date.fromisoformat(day),
+                    "model_version": version,
+                    "observed_count": observed,
+                    "missing_percentile_count": missing,
+                    "probability_at_least_095_count": high,
+                    "mean_probability": mean,
+                    "median_probability": median,
+                    "p95_probability": p95,
+                }
+            )
+    with tempfile.TemporaryDirectory(dir=folder) as staging:
+        path = Path(staging) / "daily.parquet"
+        pq.write_table(pa.Table.from_pylist(rows), path, compression="zstd")
+        path.replace(data)
+    result = {
+        "schema_version": 1,
+        "component": release["component"],
+        "snapshot_id": release["snapshot_id"],
+        "source": "FIRST EPSS",
+        "unit": "probability",
+        "granularity": "day",
+        "rows": len(rows),
+        "bytes": data.stat().st_size,
+        "sha256": file_digest(data),
+    }
+    write_json(manifest, result)
+    return {**result, "reused": False}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local-store", type=Path, required=True)
@@ -261,6 +341,8 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     publish = commands.add_parser("publish")
     publish.add_argument("--plan", required=True)
+    rollup = commands.add_parser("rollup")
+    rollup.add_argument("--component", required=True)
     read = commands.add_parser("history")
     read.add_argument("--component", required=True)
     read.add_argument("--cve", required=True)
@@ -277,11 +359,13 @@ def main() -> None:
         output = publish_component(init_table(catalog, warehouse), store, args.plan)
     else:
         release = record(store, component_key(args.component))
-        if release is None:
+        if release is None or release["component"] != args.component:
             raise DataError("EPSS component manifest is unavailable")
-        output = history(
-            catalog.load_table((NAMESPACE, NAME)), release, args.cve, args.start, args.end
-        )
+        table = catalog.load_table((NAMESPACE, NAME))
+        if args.command == "rollup":
+            output = publish_daily_rollup(table, release, root)
+        else:
+            output = history(table, release, args.cve, args.start, args.end)
     print(json.dumps(output, sort_keys=True))
 
 

@@ -40,3 +40,10 @@ update workloads. Daily partitions favor incremental replacement and
 global date pruning. Monthly partitions with clustered CVE ordering or
 hash buckets need a separate comparison for long single-CVE histories.
 Keep duplicate metric units in separate observation categories.
+
+The first local Gold projection, `mart_epss_global_daily`, is keyed by
+component and score date. It includes the source model, observed count,
+missing-percentile count, count with probability at least 0.95, mean,
+median and p95. Every row uses the same global EPSS population and
+model for that date. Days without source observations have no derived
+row. The manifest binds the file to the Silver snapshot and its SHA-256.

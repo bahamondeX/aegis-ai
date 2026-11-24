@@ -35,3 +35,12 @@ measurement. A year-level source is displayed with its actual reporting
 period. Missing intervals remain explicit. Current geographic values cannot
 be used to fill past frames. Browser playback, brushing, comparisons and
 release-aware caching are pending the combined analytical release.
+
+## Daily EPSS materialization
+
+The `v2_history rollup --component <digest>` command creates a small local
+Gold Parquet file for the pinned Silver component. The file contains one row
+per observed date, with coverage, model, probability summaries and the count
+at or above the explicit 0.95 threshold. This projection can replace
+full fact scans for those measures. The complete V2 global-risk mart also
+needs source-backed publication, KEV and severity aggregates.

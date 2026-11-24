@@ -1079,3 +1079,23 @@ planning bytes are under `data/evidence/v2-cloud/silver-parity-timing.json`.
 The new local regression suite passed 90 Python tests. No Athena queries,
 AWS writes or model calls were executed. Gold, Glue/Athena parity, the
 API/UI rollout and V2 browser acceptance remain open.
+
+## 2026-11-24T13:16:50Z — First V2-C Gold daily projection verified
+
+The version-pinned June component produced three daily Gold rows in 3,002
+bytes with a denominator of 1,022,253 source observations. The separate
+DuckDB check of the normalized Bronze files matched daily counts,
+missing-percentile counts, counts at probability 0.95 or higher, and
+mean, median and p95. Initial build took 2.66 s with 305,627,136 bytes
+maximum RSS. Local reads measured 1.121 ms first and 0.824 ms warm p95
+across 20 repeats with uncontrolled OS cache. The rerun verified and
+reused the immutable file. Evidence is in
+`data/evidence/v2-cloud/gold-daily{,-time,-replay,-parity}.*`.
+Lint, typecheck and 90 Python tests passed. The four frontend contract
+tests passed without a V2 browser rollout.
+
+Foundation commit `d5b73e9` and local Silver history commit `d698f17`
+remain the base. Next cloud acceptance is the approved Bronze migration
+and one manually triggered AWS EPSS date. The configured account still
+requires reauthentication and separate V2 approval. The combined serving
+release, additional Gold marts and V2 browser acceptance remain open.
