@@ -66,6 +66,15 @@ SSE envelope: `{version:1, investigation_id, seq, type, timestamp, payload}`; ty
 
 Ranking: deterministic order KEV first, then EPSS descending, CVSS descending, CVE ID stable tie-break; null last. Geographic query must not substitute global CVE ranking for regional exposure; if no regional evidence, say so and show global context separately.
 
+### G5 compatible extensions
+
+The [geography and CVE detail contract](docs/geography-contract.md) adds
+versioned geographic metadata to the existing map read and a guarded
+singleton detail read at `/v1/cves/{cve_id}`. Network context is independent
+of vulnerability geography. Keep the existing tool names and SSE version.
+The typed mitigation request binds the selected CVE, snapshot and evidence
+before retrieval. A handoff is an editable draft without external actions.
+
 ## Frontend
 Nuxt 4 strict TypeScript, Nuxt UI/Tailwind compatible versions. Dark operational design, original branding, responsive panels, keyboard navigation, readable contrast, reduced motion. globe.gl for globe, MapLibre + deck.gl for tactical view (lazy-load separately to avoid duplicate WebGL contexts), Cytoscape.js bounded subgraphs, ECharts for trends and KPIs. Client-only rendering for WebGL, cleanup on unmount, resize and fallback for no GPU. Use legitimate attributed basemap and geography datasets; no fabricated arcs or blinking attacks. Display source timestamps, units, confidence, empty/error/loading states, evidence drawer, filter chips, agent activity timeline. Cap nodes and map features, aggregate by country. On M2 8 GB avoid concurrent heavy builds; browser performance measured, not invented. Use Playwright Chromium smoke and screenshots of actual running app; no screenshot substitution for tests.
 
