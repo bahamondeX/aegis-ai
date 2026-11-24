@@ -1,0 +1,1163 @@
+{
+  "$defs": {
+    "Analytics": {
+      "properties": {
+        "filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "geography": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Geography",
+          "type": "string"
+        },
+        "graph": {
+          "items": {
+            "$ref": "#/$defs/Edge"
+          },
+          "title": "Graph",
+          "type": "array"
+        },
+        "observations": {
+          "items": {
+            "$ref": "#/$defs/Exposure"
+          },
+          "title": "Observations",
+          "type": "array"
+        },
+        "ranked_cve_ids": {
+          "items": {
+            "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$",
+            "type": "string"
+          },
+          "title": "Ranked Cve Ids",
+          "type": "array"
+        },
+        "risk": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiskSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "country",
+            "unsupported_region"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "scope",
+        "filters",
+        "ranked_cve_ids",
+        "graph",
+        "observations",
+        "geography"
+      ],
+      "title": "Analytics",
+      "type": "object"
+    },
+    "AnalyticsEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Analytics"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "analytics.updated",
+          "default": "analytics.updated",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "AnalyticsEvent",
+      "type": "object"
+    },
+    "Claim": {
+      "properties": {
+        "evidence_ids": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "text",
+        "evidence_ids"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "Completed": {
+      "properties": {
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "Completed",
+      "type": "object"
+    },
+    "Coverage": {
+      "properties": {
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Code"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Retrieved At"
+        },
+        "row_count": {
+          "title": "Row Count",
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "cisa",
+            "epss",
+            "nvd",
+            "shodan"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "source_date": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Date"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "partial",
+            "blocked",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "status",
+        "row_count",
+        "coverage",
+        "source_date",
+        "retrieved_at",
+        "duration_ms",
+        "error_code"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "DoneEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Completed"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "done",
+          "default": "done",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "DoneEvent",
+      "type": "object"
+    },
+    "Edge": {
+      "properties": {
+        "cve_id": {
+          "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$",
+          "title": "Cve Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "relation_type": {
+          "title": "Relation Type",
+          "type": "string"
+        },
+        "target_id": {
+          "title": "Target Id",
+          "type": "string"
+        },
+        "target_label": {
+          "title": "Target Label",
+          "type": "string"
+        },
+        "vendor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vendor"
+        }
+      },
+      "required": [
+        "cve_id",
+        "relation_type",
+        "target_id",
+        "target_label",
+        "vendor",
+        "evidence_id"
+      ],
+      "title": "Edge",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/ErrorPayload"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "ErrorPayload": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorPayload",
+      "type": "object"
+    },
+    "Evidence": {
+      "properties": {
+        "checksum": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checksum",
+          "type": "string"
+        },
+        "evidence_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "license": {
+          "title": "License",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "cisa",
+            "epss",
+            "nvd",
+            "shodan"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "source_date": {
+          "format": "date-time",
+          "title": "Source Date",
+          "type": "string"
+        },
+        "source_record_id": {
+          "title": "Source Record Id",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "source",
+        "source_record_id",
+        "retrieved_at",
+        "source_date",
+        "checksum",
+        "uri",
+        "license"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "EvidenceAdded": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "EvidenceAdded",
+      "type": "object"
+    },
+    "EvidenceEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/EvidenceAdded"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "evidence.added",
+          "default": "evidence.added",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "EvidenceEvent",
+      "type": "object"
+    },
+    "Exposure": {
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Count"
+        },
+        "country_iso2": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Country Iso2",
+          "type": "string"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "cve_id": {
+          "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$",
+          "title": "Cve Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "snapshot_at": {
+          "format": "date-time",
+          "title": "Snapshot At",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cve_id",
+        "country_iso2",
+        "snapshot_at",
+        "source",
+        "scope",
+        "count",
+        "unit",
+        "confidence",
+        "coverage",
+        "evidence_id"
+      ],
+      "title": "Exposure",
+      "type": "object"
+    },
+    "FilterProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "const": "propose_filters",
+          "default": "propose_filters",
+          "title": "Command",
+          "type": "string"
+        },
+        "filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "snapshot_id",
+        "filters"
+      ],
+      "title": "FilterProposal",
+      "type": "object"
+    },
+    "Filters": {
+      "additionalProperties": false,
+      "properties": {
+        "country_iso2": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Country Iso2"
+        },
+        "cve_ids": {
+          "default": [],
+          "items": {
+            "maxLength": 32,
+            "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Cve Ids",
+          "type": "array"
+        },
+        "date_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date From"
+        },
+        "date_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date To"
+        },
+        "kev_only": {
+          "default": false,
+          "title": "Kev Only",
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 50,
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "min_epss": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Epss"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "NONE",
+                "LOW",
+                "MEDIUM",
+                "HIGH",
+                "CRITICAL"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        }
+      },
+      "title": "Filters",
+      "type": "object"
+    },
+    "NodeEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/NodeStarted"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "node.started",
+          "default": "node.started",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "NodeEvent",
+      "type": "object"
+    },
+    "NodeStarted": {
+      "properties": {
+        "node": {
+          "enum": [
+            "plan",
+            "research",
+            "analyze",
+            "validate"
+          ],
+          "title": "Node",
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "node",
+        "revision"
+      ],
+      "title": "NodeStarted",
+      "type": "object"
+    },
+    "ProposalEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/FilterProposal"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "ui.filters.proposed",
+          "default": "ui.filters.proposed",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "ProposalEvent",
+      "type": "object"
+    },
+    "Report": {
+      "properties": {
+        "analysis_mode": {
+          "enum": [
+            "deterministic",
+            "bedrock",
+            "fallback"
+          ],
+          "title": "Analysis Mode",
+          "type": "string"
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/Claim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "coverage": {
+          "items": {
+            "$ref": "#/$defs/Coverage"
+          },
+          "title": "Coverage",
+          "type": "array"
+        },
+        "geographic_note": {
+          "title": "Geographic Note",
+          "type": "string"
+        },
+        "recommendations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recommendations",
+          "type": "array"
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "country",
+            "unsupported_region"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "score_date": {
+          "format": "date",
+          "title": "Score Date",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "usage": {
+          "items": {
+            "$ref": "#/$defs/Usage"
+          },
+          "title": "Usage",
+          "type": "array"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "score_date",
+        "scope",
+        "coverage",
+        "claims",
+        "geographic_note",
+        "recommendations",
+        "analysis_mode"
+      ],
+      "title": "Report",
+      "type": "object"
+    },
+    "ReportEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Report"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "report.completed",
+          "default": "report.completed",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "ReportEvent",
+      "type": "object"
+    },
+    "RiskSummary": {
+      "properties": {
+        "high_epss": {
+          "title": "High Epss",
+          "type": "integer"
+        },
+        "kev_cves": {
+          "title": "Kev Cves",
+          "type": "integer"
+        },
+        "total_cves": {
+          "title": "Total Cves",
+          "type": "integer"
+        },
+        "with_epss": {
+          "title": "With Epss",
+          "type": "integer"
+        },
+        "with_nvd": {
+          "title": "With Nvd",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_cves",
+        "kev_cves",
+        "with_nvd",
+        "with_epss",
+        "high_epss"
+      ],
+      "title": "RiskSummary",
+      "type": "object"
+    },
+    "StartEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "investigation_id": {
+          "format": "uuid",
+          "title": "Investigation Id",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Started"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "type": {
+          "const": "investigation.started",
+          "default": "investigation.started",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "investigation_id",
+        "seq",
+        "timestamp",
+        "type",
+        "payload"
+      ],
+      "title": "StartEvent",
+      "type": "object"
+    },
+    "Started": {
+      "properties": {
+        "snapshot_id": {
+          "format": "uuid",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "trace_id": {
+          "format": "uuid",
+          "title": "Trace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "trace_id"
+      ],
+      "title": "Started",
+      "type": "object"
+    },
+    "Usage": {
+      "properties": {
+        "attempts": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        }
+      },
+      "required": [
+        "model_id",
+        "attempts",
+        "latency_ms"
+      ],
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/StartEvent"
+    },
+    {
+      "$ref": "#/$defs/NodeEvent"
+    },
+    {
+      "$ref": "#/$defs/EvidenceEvent"
+    },
+    {
+      "$ref": "#/$defs/ProposalEvent"
+    },
+    {
+      "$ref": "#/$defs/AnalyticsEvent"
+    },
+    {
+      "$ref": "#/$defs/ReportEvent"
+    },
+    {
+      "$ref": "#/$defs/ErrorEvent"
+    },
+    {
+      "$ref": "#/$defs/DoneEvent"
+    }
+  ],
+  "title": "InvestigationEvent"
+}

@@ -11,15 +11,19 @@ import uvicorn
 
 from backend.api import create_app
 from backend.auth import LOCAL_AUDIENCE, LOCAL_ISSUER, Auth, mint
+from backend.investigations.bedrock import approved_model
+from backend.investigations.service import InvestigationService
+from backend.investigations.store import SQLiteStore
 from backend.reader import SnapshotReader
 from pipelines.config import configured_snapshot, project_environment
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AEGIS local API")
-    parser.add_argument("command", choices=("dev", "smoke"))
+    parser.add_argument("command", choices=("dev", "smoke", "smoke-investigation"))
     parser.add_argument("--snapshot", type=UUID)
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--bedrock", action="store_true")
     args = parser.parse_args()
     env = project_environment()
     root = Path(env.get("AEGIS_DATA_DIR") or "data").resolve()
@@ -27,7 +31,14 @@ def main() -> None:
     reader = SnapshotReader.duckdb(root, snapshot)
     key = secrets.token_urlsafe(48)
     auth = Auth(issuer=LOCAL_ISSUER, audience=LOCAL_AUDIENCE, workspace="local", local_key=key)
-    app = create_app(reader, auth)
+    store = SQLiteStore(root / "investigations.sqlite3")
+    selection = approved_model(env, store) if args.bedrock else None
+    app = create_app(reader, auth, InvestigationService(store, reader.snapshot, selection))
+    if args.command == "smoke-investigation":
+        from backend.investigations.smoke import smoke
+
+        smoke(app, key, reader.snapshot, require_bedrock=args.bedrock)
+        return
     if args.command == "smoke":
         from backend.smoke import verify
 

@@ -1,0 +1,41 @@
+let bucket = Resources.*[ Type == "AWS::S3::Bucket" ]
+let policy = Resources.*[ Type == "AWS::S3::BucketPolicy" ]
+let runtime = Resources.*[ Type == "AWS::BedrockAgentCore::Runtime" ]
+
+rule encrypted_checkpoint {
+    %bucket !empty
+    %bucket {
+        DeletionPolicy == "Retain"
+        UpdateReplacePolicy == "Retain"
+        Properties.PublicAccessBlockConfiguration {
+            BlockPublicAcls == true
+            BlockPublicPolicy == true
+            IgnorePublicAcls == true
+            RestrictPublicBuckets == true
+        }
+        Properties.BucketEncryption.ServerSideEncryptionConfiguration[*] {
+            ServerSideEncryptionByDefault.SSEAlgorithm == "aws:kms"
+            ServerSideEncryptionByDefault.KMSMasterKeyID.Ref == "LakeKmsArn"
+        }
+        Properties.VersioningConfiguration.Status == "Enabled"
+    }
+    %policy !empty
+    %policy.Properties.PolicyDocument.Statement[
+        Effect == "Deny"
+        Condition.Bool."aws:SecureTransport" == "false"
+    ] !empty
+}
+
+rule scoped_runtime {
+    %runtime !empty
+    %runtime.Properties {
+        ProtocolConfiguration == "HTTP"
+        AuthorizerConfiguration.CustomJWTAuthorizer.AllowedAudience !empty
+        some RequestHeaderConfiguration.RequestHeaderAllowlist[*] == "Authorization"
+        LifecycleConfiguration.IdleRuntimeSessionTimeout == 60
+        LifecycleConfiguration.MaxLifetime == 120
+        EnvironmentVariables.AEGIS_AGENTCORE_APPROVAL.Ref == "AgentCoreApproval"
+        EnvironmentVariables.AEGIS_BEDROCK_APPROVAL.Ref == "BedrockApproval"
+        EnvironmentVariables.AEGIS_SNAPSHOT.Ref == "PinnedSnapshot"
+    }
+}

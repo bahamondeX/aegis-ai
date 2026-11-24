@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import date
 from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
 from threading import BoundedSemaphore, Timer
 from typing import Any
@@ -236,9 +237,13 @@ class SnapshotReader:
             self.slots.release()
 
     def coverage(self) -> list[Coverage]:
+        return [value.model_copy() for value in self.coverage_rows]
+
+    @cached_property
+    def coverage_rows(self) -> tuple[Coverage, ...]:
         sql, _ = query_template(Query.COVERAGE)
         sql = sql.replace("FROM ingestion_runs", f"FROM {self.table('ingestion_runs')}")
-        return [Coverage.model_validate(row) for row in self.rows(sql, [], 4)]
+        return tuple(Coverage.model_validate(row) for row in self.rows(sql, [], 4))
 
     def envelope[T](self, data: T, *, regional: bool = False) -> Envelope[T]:
         return Envelope(

@@ -4,6 +4,8 @@ import asyncio
 import json
 import socket
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Thread
 from typing import Any
@@ -135,7 +137,8 @@ async def check(base: str, key: str, reader: SnapshotReader, root: Path) -> None
         )
 
 
-def verify(app: FastAPI, key: str, reader: SnapshotReader, root: Path) -> None:
+@contextmanager
+def live_server(app: FastAPI) -> Iterator[str]:
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen(16)
@@ -149,9 +152,14 @@ def verify(app: FastAPI, key: str, reader: SnapshotReader, root: Path) -> None:
                 time.sleep(0.05)
             if not server.started:
                 raise RuntimeError("local API did not start within ten seconds")
-            asyncio.run(check(f"http://127.0.0.1:{port}", key, reader, root))
+            yield f"http://127.0.0.1:{port}"
         finally:
             server.should_exit = True
             thread.join(5)
         if thread.is_alive():
             raise RuntimeError("local API failed to stop")
+
+
+def verify(app: FastAPI, key: str, reader: SnapshotReader, root: Path) -> None:
+    with live_server(app) as url:
+        asyncio.run(check(url, key, reader, root))

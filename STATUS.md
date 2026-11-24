@@ -392,3 +392,88 @@ both with exit 0. Raw evidence and credentials are excluded from Git.
 
 G3 is complete for local verification. Investigation streaming and live
 Bedrock integration belong to G4.
+
+## 2026-11-24T02:54:04Z — G4 locally verified, live gate blocked
+
+Resumed from G2 commit `a63a46f` and G3 commit `ff203dd`. The four-node
+LangGraph uses the six authenticated MCP tools and the pinned release
+`4e13ca6b-c2e1-4407-88bc-c362da7dbacb`. The Validator renders claims only
+from matching evidence, including the EPSS score date and references.
+Bedrock can select existing claims by key. Each run has a bounded
+checkpoint and SSE journal scoped to its authenticated owner. The G5
+TypeScript client validates the same wire schema and preserves manual
+filter edits when investigation events arrive.
+
+The local evidence directory is `data/evidence/g4/`. Durations below are
+for the stated commands or the HTTP stream measurement as identified.
+
+| Verification | Exit / outcome | Evidence |
+| --- | --- | --- |
+| `make lint` and `make typecheck` | 0 each, 59 formatted Python files and 39 checked source modules | `lint-final.log`, `typecheck-final.log` |
+| `make test` | 0, 55 passed in 8.38 s of pytest time | `make-test-final.log` |
+| `make verify-phase1` | 0, 55 passed and pinned Parquet hashes and sampled query results reproduced in 16.45 s wall time | `phase1-final.log` |
+| `make smoke-local` | 0, 7 authenticated REST routes and 6 MCP tools in 4.45 s | `g3-smoke-final.log` |
+| `make smoke-investigation` | 0, first event 7.56 ms, report and terminal 428.76 ms | `investigation-final.log` |
+| `make smoke-agent-local` | 0, first event 5.69 ms, report and terminal 433.76 ms | `runtime-final.log` |
+| G4 isolated evaluation `pytest -q tests/unit/test_investigations.py` | 0, 21 passed. Includes grounding, allowlisted tool routing, unavailable geography, tenant and user isolation, malformed model output, throttling, timeout recovery, cancellation, durable replay, and encrypted conditional S3 writes. | `eval-final.log` |
+| Frozen pnpm install, strict type check, tests, registry audit | 0 each, four TypeScript client tests passed and the audit reported no known vulnerabilities | `frontend-type-final.log`, `frontend-test-final.log`, `frontend-audit.log` |
+| `python -m scripts.verify_frontend_stream` | 0, compiled client received 10 real events, first at 32.74 ms and complete at 573.61 ms. It applied the authorized proposal and its matching analytics atomically. | `frontend-live-final.log` |
+| G2 local `make synth` | 0, existing lakehouse stack still synthesizes | `g2-synth.log` |
+| `make synth-agent`, `cfn-lint 1.60.1`, `cfn-guard 3.2.1` | 0 each, including private KMS checkpoint, TLS, retention, JWT, separate approval and lifetime rules | `synth-agent-final.log`, `cfn-lint.log`, `cfn-guard.log` |
+| Local synthesized image build and Docker `--network none` loopback smoke | 0 each, Linux ARM64, UID 10001, 1,107,288,808 bytes. First event 47.81 ms and completion 845.47 ms with the real read-only snapshot and matching Linux DuckDB ICU extension. | `docker-build-final.log`, `docker-runtime-smoke.log` |
+| `AEGIS_BEDROCK_APPROVAL= make smoke-investigation BEDROCK=1` | 2 at the scoped approval guard, as expected | `bedrock-guard.log` |
+
+Each G4 smoke observed 10 ordered events, 8 claims supported by 8 retrieved
+evidence IDs, a typed filter proposal, exact cursor replay and one terminal
+event. The unsupported regional investigation emitted zero claims and
+zero filter proposals. A Peru investigation emitted no observations,
+ranked CVEs or risk summary because the coverage was unavailable.
+The model adapter unit test used a stubbed SDK
+response to exercise token accounting. Live inference latency and token
+usage are unavailable pending authorization.
+
+### Additional live Athena parity
+
+Ran `uv run --locked --no-sync python -m scripts.verify_g3_athena` with
+exit 0 in 27.61 s. STS matched the configured default AWS profile,
+account ending 6271 and region `us-east-1`. The workgroup enforced its
+64 MiB cutoff. The verification matched six DuckDB cases, including the
+filtered KPI and ranking, exact CVE and date scope, empty regional map,
+12 graph edges and provenance on the same Iceberg release. Seven queries
+scanned 10,210,468 bytes. The longest Athena query was 6,224 ms. The
+verification capped itself at eight queries with an estimated maximum
+scan charge of $0.00268435, within the $15 ceiling under the earlier
+$5.45 G2 operating scenario. These are scan and operating estimates.
+The current account invoice balance was unavailable. Query IDs and
+per-query data are in `athena-g3.log`.
+
+### Corrections and remaining gate
+
+The first SSE smoke failed on MCP host-header validation with HTTP 421.
+An explicit loopback Host fixed the official transport. One evaluation
+collection attempt failed because pytest reserves the parameter name
+`request`. Renaming it allowed the tests to run. The Node 22.13.1 bundled
+Corepack could not match the registry signature. A pinned Corepack 0.34.6
+runner verified the pnpm 10.32.1 release. A browser-stream TypeScript error
+was corrected by decoding chunks incrementally. The final loops above passed.
+
+The AWS control plane confirmed Nova Micro `amazon.nova-micro-v1:0`
+active and authorized for in-region text inference in `us-east-1`.
+The no-charge CountTokens probe returned a ValidationException because
+Nova Micro does not support that API. See `model-control.log`. Model
+selection, rate settings and the independent budget ledger are configurable.
+
+**G4 live gate remains BLOCKED on separate Bedrock authorization.**
+After approval, run the live Converse smoke and record the actual tokens,
+latency, cited report and terminal event. The AWS AgentCore deployment
+also requires its separate authorization and an approved OIDC configuration.
+The local template and image checks verify packaging and configuration.
+Cloud change-set validation, deployed JWT behavior and remote streaming
+remain pending. The bounded follow-up estimates are $0.021504 for Bedrock
+and approximately $0.48 for AgentCore and supporting resources
+([cost details](docs/g4-investigations.md)). The proposed ceilings are
+$5 for each service and $15 remains the existing lakehouse ceiling.
+
+G5 preparation delivered the framework-neutral SSE and visualization
+state modules. Nuxt 3's documented maintenance period ended on 2026-07-31.
+The full dashboard, browser tests and G5 acceptance remain pending.

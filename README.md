@@ -129,3 +129,38 @@ G3 verification runs over DuckDB. Cloud deployment and investigation streaming
 are outside these local tests.
 [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x) ·
 [FastAPI query validation](https://fastapi.tiangolo.com/tutorial/query-param-models/)
+
+## G4 investigations
+
+`make smoke-investigation` serves the real pinned DuckDB snapshot, calls the existing
+MCP tools and verifies SSE, citations, filter proposals, replay and unavailable geography.
+`make smoke-agent-local` exercises the AgentCore HTTP contract on loopback.
+`make synth-agent` produces a separate local CloudFormation assembly under
+`data/agentcore-cdk.out`.
+
+An authenticated client POSTs to `/v1/investigations` with a bearer token and an
+`Idempotency-Key`. The JSON body includes `question` and can specify `scope`
+(`global` or `regional`), typed `filters`, and `snapshot_id`. Use a country
+filter for a country-level investigation. Reuse the same key and body with
+`Last-Event-ID` to replay outstanding events. To cancel, POST to
+`/v1/investigations/{investigation_id}/cancel` with the same authenticated subject.
+AgentCore receives the same request at `/invocations` and accepts
+`{"action":"cancel","investigation_id":"…"}` there.
+
+The graph builds and cites claims from retrieved evidence. With Bedrock enabled,
+the model can select which existing claims to emphasize. The Validator builds
+report text and visualization events from typed data. The frontend client
+validates the SSE schema and applies accepted proposals and matching analytics
+together. Manual filter edits take precedence over outstanding proposals.
+
+Run the frontend contract checks with the Node and pnpm versions pinned at the
+repository root. From the repository root, run `pnpm --dir frontend install
+--frozen-lockfile`, `pnpm --dir frontend typecheck`, `pnpm --dir frontend test`
+and `uv run --locked --no-sync python -m scripts.verify_frontend_stream`.
+Regenerate the wire schema with `uv run --locked --no-sync python -m
+scripts.export_investigation_schema`, followed by `pnpm --dir frontend contracts`.
+
+Live inference requires the separate Bedrock approval and rates in
+[.env.example](.env.example). The deployment prerequisites, prices and measured
+local verification are recorded in the [G4 runbook](docs/g4-investigations.md)
+and [status log](STATUS.md).

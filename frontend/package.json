@@ -1,0 +1,20 @@
+{
+  "name": "aegis-frontend",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "contracts": "json2ts -i investigations/events.schema.json -o investigations/events.d.ts --unknownAny=true --additionalProperties=false --ignoreMinAndMaxItems=true",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --outDir .test-dist && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.18.0",
+    "ajv-formats": "3.0.1"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "15.0.4",
+    "typescript": "5.9.3"
+  }
+}

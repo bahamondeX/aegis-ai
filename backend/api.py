@@ -16,6 +16,8 @@ from starlette.datastructures import Headers
 from starlette.types import Receive, Scope, Send
 
 from backend.auth import Auth
+from backend.investigations.routes import install
+from backend.investigations.service import InvestigationService
 from backend.models import (
     Coverage,
     Edge,
@@ -50,7 +52,13 @@ async def mcp_result[T](call: Callable[[], Envelope[T]]) -> Envelope[T]:
         raise ToolError(json.dumps({"code": error.code, "message": str(error)})) from None
 
 
-def create_app(reader: SnapshotReader, auth: Auth) -> FastAPI:
+def create_app(
+    reader: SnapshotReader,
+    auth: Auth,
+    investigations: InvestigationService | None = None,
+    *,
+    runtime: bool = False,
+) -> FastAPI:
     mcp = FastMCP("AEGIS", stateless_http=True, json_response=True, streamable_http_path="/")
 
     @mcp.tool()
@@ -155,5 +163,7 @@ def create_app(reader: SnapshotReader, auth: Auth) -> FastAPI:
         return reader.evidence(evidence_id)
 
     app.include_router(routes)
+    if investigations is not None:
+        install(app, auth, investigations, runtime=runtime)
     app.mount("/mcp", guarded_mcp)
     return app

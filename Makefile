@@ -3,13 +3,14 @@ RUN = uv run --locked --no-sync
 CLI = $(RUN) python -m pipelines.cli
 LAKE = $(RUN) python -m infra.operations
 API = $(RUN) python -m backend.cli
+AGENT = $(RUN) python -m backend.agentcore
 SELECT = $(if $(SNAPSHOT),--snapshot "$(SNAPSHOT)")
 LATEST_SELECT = $(if $(filter 1,$(LATEST)),--latest)
 G2_TARGETS = aws-preflight synth diff diff-local prepare-bootstrap-policy cdk-bootstrap deploy secrets-sync init-tables publish-local ingest-cloud verify-cloud destroy
 
-.PHONY: help preflight bootstrap ingest-local validate-data query-local verify-phase1 lint typecheck test dev smoke-local $(G2_TARGETS)
+.PHONY: help preflight bootstrap ingest-local validate-data query-local verify-phase1 lint typecheck test dev smoke-local smoke-investigation smoke-agent-local synth-agent $(G2_TARGETS)
 help:
-	@printf '%s\n' 'G1 targets' '  preflight bootstrap ingest-local validate-data query-local verify-phase1 lint test' 'G2 targets' '  typecheck $(G2_TARGETS)' 'G3 targets' '  dev smoke-local' 'Project commands read the root .env. Use SNAPSHOT=<run-uuid> to override its snapshot.' 'Use LATEST=1 with verify-cloud to verify the current cloud release.'
+	@printf '%s\n' 'G1 targets' '  preflight bootstrap ingest-local validate-data query-local verify-phase1 lint test' 'G2 targets' '  typecheck $(G2_TARGETS)' 'G3 targets' '  dev smoke-local' 'G4 targets' '  smoke-investigation smoke-agent-local synth-agent' 'Project commands read the root .env. Use SNAPSHOT=<run-uuid> to override its snapshot.' 'Use LATEST=1 with verify-cloud to verify the current cloud release.'
 
 preflight:
 	@sh scripts/preflight.sh
@@ -44,6 +45,15 @@ dev:
 
 smoke-local:
 	$(API) smoke $(SELECT)
+
+smoke-investigation:
+	$(API) smoke-investigation $(SELECT) $(if $(filter 1,$(BEDROCK)),--bedrock)
+
+smoke-agent-local:
+	$(AGENT) --smoke-local $(SELECT)
+
+synth-agent:
+	JSII_RUNTIME_PACKAGE_CACHE=disabled $(RUN) python -m infra.agentcore_stack
 
 $(G2_TARGETS):
 	$(LAKE) $@ $(SELECT) $(LATEST_SELECT)
