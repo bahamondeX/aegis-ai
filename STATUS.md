@@ -861,3 +861,13 @@ success. The final authorization regression passed all 72 tests
 Cognito still showed verified email and no enrolled or preferred factor.
 No application approval was written by the operator outside the private
 onboarding flow.
+
+## 2026-11-24T08:02:19Z — Scannable administrator enrollment
+
+The private onboarding command now displays a QR code before prompting for
+the authenticator's six-digit code. The macOS renderer receives the setup
+URI over stdin and displays the QR and manual fallback only on the owner's
+terminal. Apple Vision recovered the exact dummy URI from the rendered
+matrix. `make lint typecheck test` passed with 72 tests. This update affects
+the local onboarding command. The owner's phone pairing remains a private
+step.

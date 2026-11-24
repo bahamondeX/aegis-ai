@@ -43,7 +43,9 @@ once after the identity change set completes. It leaves an existing password
 alone. The one-day invitation uses Cognito's `NEW_PASSWORD_REQUIRED`
 challenge. The mailbox owner completes the password change, independently
 verifies the address and enrolls TOTP from a private interactive terminal.
-The enrollment URI belongs only in the owner's authenticator.
+When the QR code appears, scan it from the phone's authenticator and enter
+the current code from the new AEGIS entry. The displayed key supports manual
+time-based setup if the terminal QR renderer is unavailable.
 
 ```sh
 JSII_RUNTIME_PACKAGE_CACHE=disabled uv run --locked --no-sync python -m scripts.platform_admin onboard

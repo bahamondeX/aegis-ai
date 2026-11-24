@@ -2,9 +2,11 @@
 
 import argparse
 import secrets
+import subprocess
 import sys
 from datetime import UTC, datetime
 from getpass import getpass
+from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
 
@@ -75,6 +77,50 @@ def verify_admin_email(client, access: str) -> None:
                 raise
             client.get_user_attribute_verification_code(AccessToken=access, AttributeName="email")
             print("The code expired. Cognito sent a new verification email.")
+
+
+def display_authenticator_setup(uri: str, setup_key: str) -> None:
+    # Keep the enrollment secret in stdin and the owner's terminal only.
+    with open("/dev/tty", "w") as terminal:
+        try:
+            result = subprocess.run(
+                ["/usr/bin/swift", str(Path(__file__).with_name("platform_admin_qr.swift"))],
+                input=uri,
+                text=True,
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
+            rows = result.stdout.splitlines()
+            if set("".join(rows)) != {"0", "1"} or any(len(row) != len(rows) for row in rows):
+                raise ValueError("invalid QR matrix")
+        except (OSError, subprocess.SubprocessError, ValueError):
+            print(
+                "Terminal QR unavailable. Add a time-based account using the setup key below.",
+                file=terminal,
+            )
+        else:
+            print(
+                "In your phone's authenticator, add an account and scan this QR code.",
+                file=terminal,
+            )
+            border = "0" * (len(rows) + 8)
+            padded = [border] * 4 + ["0000" + row + "0000" for row in rows] + [border] * 4
+            if len(padded) % 2:
+                padded.append(border)
+            colors = {"0": 255, "1": 0}
+            for top, bottom in zip(padded[::2], padded[1::2], strict=True):
+                line = []
+                previous = None
+                for pair in zip(top, bottom, strict=True):
+                    if pair != previous:
+                        fg, bg = (colors[pixel] for pixel in pair)
+                        line.append(f"\033[38;2;{fg};{fg};{fg};48;2;{bg};{bg};{bg}m")
+                        previous = pair
+                    line.append("▀")
+                print("".join(line) + "\033[0m", file=terminal)
+        print(f"Manual setup key for {ADMIN_EMAIL}: {setup_key}", file=terminal)
+        print("Keep the QR and setup key private.", file=terminal)
 
 
 def verify_admin_totp(client, access: str) -> None:
@@ -207,13 +253,7 @@ def main() -> None:
             enrollment = client.associate_software_token(AccessToken=access)
             label = quote(f"AEGIS:{ADMIN_EMAIL}", safe="")
             uri = f"otpauth://totp/{label}?secret={enrollment['SecretCode']}&issuer=AEGIS"
-            # Only the administrator's terminal receives the enrollment secret.
-            with open("/dev/tty", "w") as terminal:
-                print(
-                    f"Add this authenticator URI privately, then clear terminal scrollback:\n{uri}",
-                    file=terminal,
-                )
-            print("For manual setup, use the URI's secret value as the time-based setup key.")
+            display_authenticator_setup(uri, enrollment["SecretCode"])
             verify_admin_totp(client, access)
         client.set_user_mfa_preference(
             AccessToken=access,
