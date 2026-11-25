@@ -1,5 +1,7 @@
 # AEGIS AI
 
+![AEGIS logo](docs/images/aegis.jpeg)
+
 AEGIS is an evidence-backed vulnerability intelligence workspace. It captures CISA KEV and
 FIRST EPSS, enriches up to 20 KEV CVEs per run from NVD, and serves pinned releases through
 DuckDB locally and Athena in AWS. The Nuxt 4 workspace combines source coverage,

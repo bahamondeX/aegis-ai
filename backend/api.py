@@ -38,6 +38,7 @@ from backend.models import (
 from backend.reader import SnapshotReader
 from backend.v2_catalog import CatalogFilters, CatalogPage, CatalogReader
 from backend.v2_network import NetworkContextReader, NetworkYear, WdiAlpha2
+from backend.v2_series import DailyRiskSeries, RiskSeriesReader, SeriesFilters
 
 if TYPE_CHECKING:
     from backend.investigations.service import InvestigationService
@@ -70,6 +71,7 @@ def create_app(
     runtime: bool = False,
     network: NetworkContextReader | Callable[[], NetworkContextReader] | None = None,
     catalog: CatalogReader | Callable[[], CatalogReader] | None = None,
+    series: RiskSeriesReader | Callable[[], RiskSeriesReader] | None = None,
 ) -> FastAPI:
     def snapshot_reader() -> SnapshotReader:
         return reader() if callable(reader) else reader
@@ -96,6 +98,19 @@ def create_app(
         async def get_catalog(filters: CatalogFilters | None = None) -> CatalogPage:
             """Read a bounded page from the verified official vulnerability catalog."""
             return await mcp_result(lambda: catalog_page(filters))
+
+    def risk_series(filters: SeriesFilters | None) -> DailyRiskSeries:
+        if series is None:
+            raise ServiceError("release_unavailable", "EPSS history is unavailable", 503)
+        current = series() if callable(series) else series
+        return current.series(filters or SeriesFilters())
+
+    if series is not None:
+
+        @mcp.tool()
+        async def get_global_epss_series(filters: SeriesFilters | None = None) -> DailyRiskSeries:
+            """Read a pinned, global daily EPSS series with gaps and model versions preserved."""
+            return await mcp_result(lambda: risk_series(filters))
 
     if network is not None:
 
@@ -243,6 +258,12 @@ def create_app(
         @v2.get("/catalog")
         def official_catalog(filters: Annotated[CatalogFilters, Query()]) -> CatalogPage:
             return catalog_page(filters)
+
+    if series is not None:
+
+        @v2.get("/analytics/epss")
+        def epss_history(filters: Annotated[SeriesFilters, Query()]) -> DailyRiskSeries:
+            return risk_series(filters)
 
     if network is not None:
 

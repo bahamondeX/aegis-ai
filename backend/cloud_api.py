@@ -31,6 +31,7 @@ from backend.models import ServiceError
 from backend.reader import SnapshotReader
 from backend.v2_catalog import CatalogReader
 from backend.v2_network import NetworkContextReader
+from backend.v2_series import RiskSeriesReader
 from infra.settings import SDK_CONFIG, Settings
 from pipelines.bronze import S3Bronze
 from pipelines.io import DataError
@@ -112,11 +113,11 @@ def gateway(
     *,
     network: Callable[[], NetworkContextReader] | None = None,
     catalog: Callable[[], CatalogReader] | None = None,
+    series: Callable[[], RiskSeriesReader] | None = None,
 ) -> FastAPI:
-    app = create_app(reader, auth, network=network, catalog=catalog)
-    reads = frozenset(
-        path for path, loader in (("/v2/network", network), ("/v2/catalog", catalog)) if loader
-    )
+    app = create_app(reader, auth, network=network, catalog=catalog, series=series)
+    loaders = (("/v2/network", network), ("/v2/catalog", catalog), ("/v2/analytics/epss", series))
+    reads = frozenset(path for path, loader in loaders if loader)
     app.add_middleware(GatewayPaths, v2_reads=reads)
     install_identity(app, auth)
 
@@ -282,8 +283,12 @@ def main() -> None:
     network_release = env.get("AEGIS_V2_NETWORK_RELEASE")
     catalog_component = env.get("AEGIS_V2_CATALOG_COMPONENT")
     catalog_release = env.get("AEGIS_V2_CATALOG_RELEASE")
+    history_campaign = env.get("AEGIS_V2_HISTORY_CAMPAIGN")
+    history_release = env.get("AEGIS_V2_HISTORY_RELEASE")
     if bool(catalog_component) != bool(catalog_release):
         raise DataError("hosted catalog requires both the component and serving release digests")
+    if bool(history_campaign) != bool(history_release):
+        raise DataError("hosted EPSS history requires both the campaign and release digests")
 
     @cache
     def bronze() -> S3Bronze:
@@ -319,6 +324,18 @@ def main() -> None:
                 "release_unavailable", "The pinned catalog release is unavailable", 503
             ) from error
 
+    @cache
+    def load_series() -> RiskSeriesReader:
+        if not history_campaign or not history_release:
+            raise ServiceError("release_unavailable", "The EPSS series is unavailable", 503)
+        try:
+            return RiskSeriesReader(bronze(), history_campaign, history_release)
+        except Exception as error:
+            LOG.error("EPSS release initialization failed: %s", type(error).__name__)
+            raise ServiceError(
+                "release_unavailable", "The pinned EPSS release is unavailable", 503
+            ) from error
+
     uvicorn.run(
         gateway(
             load_snapshot,
@@ -327,6 +344,7 @@ def main() -> None:
             client,
             network=load_network if network_release else None,
             catalog=load_catalog if catalog_release else None,
+            series=load_series if history_release else None,
         ),
         host="0.0.0.0",
         port=8080,
