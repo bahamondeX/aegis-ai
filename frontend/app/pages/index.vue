@@ -150,6 +150,9 @@ v-for="entry in nav" :key="entry.id" :href="'#' + entry.id"
            :class="{ active: activeSection === entry.id }" @click="navigate(entry.id)">
           <component :is="entry.icon" :size="19" aria-hidden="true" /> {{ entry.label }}
         </a>
+        <a href="/demo/exposure/">
+          <Globe2 :size="19" aria-hidden="true" /> Exposición a CVE · Demo histórica
+        </a>
       </nav>
       <div class="sidebar-footer">
         <div class="workspace-scope"><span class="status-dot" /><div><strong>AEGIS Workspace</strong><span>Development workspace</span></div></div>

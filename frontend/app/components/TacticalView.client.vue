@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import 'maplibre-gl/dist/maplibre-gl.css'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+import type { Metric, Observation } from '../../investigations/exposure'
 import type { Exposure } from '../../investigations/events'
-import { countryBorders, countryFeatures, countryOutlines, observedCountries } from '../composables/cartography'
+import { countryBorders, countryFeatures, countryOutlines, historicalMap, observedCountries, type HistoricalArea, type HistoricalMarker } from '../composables/cartography'
 
-const props = defineProps<{ observations: Exposure[]; network: string[]; country?: string }>()
+const props = defineProps<{
+  observations?: Exposure[]; network?: string[]; country?: string
+  history?: Observation[]; metric?: Metric
+}>()
+const emit = defineEmits<{ country: [iso2: string]; marker: [id: string] }>()
+const model = computed(() => props.history ? historicalMap(props.history, props.metric ?? 'count', props.country) : undefined)
+
+function rgb(hex: string): [number, number, number] {
+  const value = parseInt(hex.slice(1), 16)
+  return [value >> 16, (value >> 8) & 255, value & 255]
+}
 const target = ref<HTMLElement>()
 const unavailable = ref(false)
 const rendered = ref(false)
@@ -13,7 +24,7 @@ let cleanup: (() => void) | undefined
 let disposed = false
 onMounted(async () => {
   try {
-    const [{ Map, setWorkerUrl }, { MapboxOverlay }, { GeoJsonLayer }] = await Promise.all([
+    const [{ Map, setWorkerUrl }, { MapboxOverlay }, { GeoJsonLayer, ScatterplotLayer }] = await Promise.all([
       import('maplibre-gl'), import('@deck.gl/mapbox'), import('@deck.gl/layers'),
     ])
     const element = target.value
@@ -37,20 +48,41 @@ onMounted(async () => {
       },
     })
     const overlay = new MapboxOverlay({ interleaved: false, layers: [] })
-    const stop = watch(() => [props.observations, props.network, props.country] as const, ([rows, countries, country]) => {
-      if (!rows.length && !countries.length && !country) {
+    const stop = watch(() => [model.value, props.observations, props.network, props.country] as const, ([history, rows, countries, country]) => {
+      if (history) {
+        if (!map.hasControl(overlay)) map.addControl(overlay)
+        overlay.setProps({ layers: [
+          new GeoJsonLayer<HistoricalArea>({
+            id: 'historical-exposure', data: history.shapes, pickable: true,
+            getFillColor: row => rgb(row.properties.color),
+            getLineColor: row => row.properties.selected ? [219, 231, 241] : [82, 100, 116],
+            lineWidthMinPixels: 0.8,
+            onClick: ({ object }) => {
+              if (object?.properties.country) emit('country', object.properties.country)
+            },
+          }),
+          new ScatterplotLayer<HistoricalMarker>({
+            id: 'historical-centroids', data: history.markers, pickable: true,
+            radiusUnits: 'pixels', getRadius: 5,
+            getPosition: row => row.position, getFillColor: [225, 237, 246],
+            onClick: ({ object }) => { if (object) emit('marker', object.id) },
+          }),
+        ] })
+        return
+      }
+      if (!rows?.length && !countries?.length && !country) {
         if (map.hasControl(overlay)) map.removeControl(overlay)
         return
       }
       if (!map.hasControl(overlay)) map.addControl(overlay)
       overlay.setProps({ layers: [
         new GeoJsonLayer({
-          id: 'published-network-context', data: countryFeatures(countries),
+          id: 'published-network-context', data: countryFeatures(countries ?? []),
           getFillColor: [73, 115, 145, 125], getLineColor: [121, 152, 176, 255],
           lineWidthMinPixels: 1.4,
         }),
         new GeoJsonLayer({
-          id: 'approximate-exposure', data: observedCountries(rows),
+          id: 'approximate-exposure', data: observedCountries(rows ?? []),
           getFillColor: [224, 162, 79, 135], getLineColor: [234, 186, 115, 255],
           lineWidthMinPixels: 1.6,
         }),
@@ -59,6 +91,9 @@ onMounted(async () => {
           filled: false, getLineColor: [210, 226, 243, 255], lineWidthMinPixels: 1.5,
         }),
       ] })
+    }, { immediate: true })
+    const stopFocus = watch(() => model.value?.center, center => {
+      if (center) map.jumpTo({ center, zoom: 2.25 })
     }, { immediate: true })
     map.on('error', (event) => {
       console.warn('Tactical map:', event.error.message)
@@ -72,6 +107,7 @@ onMounted(async () => {
     resize.observe(element)
     cleanup = () => {
       stop()
+      stopFocus()
       resize.disconnect()
       if (map.hasControl(overlay)) map.removeControl(overlay)
       map.remove()

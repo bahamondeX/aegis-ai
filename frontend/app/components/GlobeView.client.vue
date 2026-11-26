@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { Minus, Plus, RotateCcw } from '@lucide/vue'
-import { numericToAlpha2 } from 'i18n-iso-countries'
+import isoCountries from 'i18n-iso-countries'
+import type { Metric, Observation } from '../../investigations/exposure'
 import type { Exposure } from '../../investigations/events'
-import { countryFeatures, countryOutlines, observedCountries, type CountryFeature } from '../composables/cartography'
+import { countryFeatures, countryOutlines, historicalMap, observedCountries, type CountryFeature, type HistoricalMarker, type HistoricalShape } from '../composables/cartography'
 
-const props = defineProps<{ observations: Exposure[]; network: string[]; country?: string }>()
-const emit = defineEmits<{ country: [iso2: string] }>()
+const props = defineProps<{
+  observations?: Exposure[]; network?: string[]; country?: string
+  history?: Observation[]; metric?: Metric
+}>()
+const emit = defineEmits<{ country: [iso2: string]; marker: [id: string] }>()
 const target = ref<HTMLElement>()
 const initialView = { lat: 17, lng: -35, altitude: 2.05 }
 const ready = ref(false)
@@ -36,6 +40,12 @@ onMounted(async () => {
       .atmosphereAltitude(0.16)
       .polygonsData(countryOutlines().features)
       .polygonAltitude(0.008)
+      .pointLat(value => (value as HistoricalMarker).position[1])
+      .pointLng(value => (value as HistoricalMarker).position[0])
+      .pointColor(() => '#e1edf6')
+      .pointAltitude(0.025)
+      .pointRadius(value => (value as HistoricalMarker).count > 1 ? 0.6 : 0.36)
+      .onPointClick(value => emit('marker', (value as HistoricalMarker).id))
       .polygonCapColor(() => '#17333e')
       .polygonSideColor(() => 'rgba(21, 43, 57, 0.25)')
       .polygonStrokeColor(() => '#526474')
@@ -43,7 +53,8 @@ onMounted(async () => {
       .pointOfView(initialView, 0)
       .onPolygonClick((value) => {
         const feature = value as CountryFeature
-        const code = feature.id === undefined ? undefined : numericToAlpha2(feature.id)
+        const code = props.history ? (value as HistoricalShape).properties.country :
+          feature.id === undefined ? undefined : isoCountries.numericToAlpha2(feature.id)
         if (code) emit('country', code)
       })
       .onZoom((view) => {
@@ -94,9 +105,16 @@ onMounted(async () => {
     const contextRestored = () => { unavailable.value = false; widget.resumeAnimation() }
     canvas.addEventListener('webglcontextlost', contextLost)
     canvas.addEventListener('webglcontextrestored', contextRestored)
-    const stop = watch(() => [props.observations, props.network, props.country] as const, ([rows, countries, country]) => {
-      const observed = new Set(observedCountries(rows).map(row => row.id))
-      const context = new Set(countryFeatures(countries).map(row => row.id))
+    const model = computed(() => props.history ? historicalMap(props.history, props.metric ?? 'count', props.country) : undefined)
+    const stop = watch(() => [model.value, props.observations, props.network, props.country] as const, ([history, rows, countries, country]) => {
+      if (history) {
+        widget.polygonsData(history.shapes).pointsData(history.markers)
+          .polygonCapColor(value => (value as HistoricalShape).properties.color)
+          .polygonStrokeColor(value => (value as HistoricalShape).properties.selected ? '#dbe7f1' : '#526474')
+        return
+      }
+      const observed = new Set(observedCountries(rows ?? []).map(row => row.id))
+      const context = new Set(countryFeatures(countries ?? []).map(row => row.id))
       const selected = country ? countryFeatures([country])[0]?.id : undefined
       widget.polygonCapColor((value) => {
         const code = (value as CountryFeature).id
@@ -106,8 +124,15 @@ onMounted(async () => {
         return code && code === selected ? '#dbe7f1' : context.has(code) ? '#83a6c0' : '#526474'
       })
     }, { immediate: true })
+    const stopFocus = watch(() => model.value?.center, center => {
+      if (center) {
+        controls.autoRotate = false
+        widget.pointOfView({ lng: center[0], lat: center[1], altitude: 1.1 }, 0)
+      }
+    })
     cleanup = () => {
       stop()
+      stopFocus()
       resize.disconnect()
       visible.disconnect()
       canvas.removeEventListener('webglcontextlost', contextLost)

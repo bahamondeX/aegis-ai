@@ -1,0 +1,29 @@
+{
+  "CVE-2024-12084": {
+    "product": "rsync",
+    "description": "Corrupción de memoria por desbordamiento en el manejo de las sumas de comprobación de rsync.",
+    "cvss_score": 9.8,
+    "cvss_version": "3.1",
+    "cvss_source": "secalert@redhat.com",
+    "severity": "CRITICAL",
+    "source_url": "https://nvd.nist.gov/vuln/detail/CVE-2024-12084"
+  },
+  "CVE-2025-0282": {
+    "product": "Ivanti Connect Secure",
+    "description": "Desbordamiento de búfer en versiones afectadas de Ivanti Connect Secure, Policy Secure y ZTA Gateways.",
+    "cvss_score": 9.0,
+    "cvss_version": "3.1",
+    "cvss_source": "nvd@nist.gov",
+    "severity": "CRITICAL",
+    "source_url": "https://nvd.nist.gov/vuln/detail/CVE-2025-0282"
+  },
+  "CVE-2025-54309": {
+    "product": "CrushFTP",
+    "description": "El control de acceso en versiones afectadas de CrushFTP puede permitir acceso administrativo sin autenticación.",
+    "cvss_score": 9.8,
+    "cvss_version": "3.1",
+    "cvss_source": "nvd@nist.gov",
+    "severity": "CRITICAL",
+    "source_url": "https://nvd.nist.gov/vuln/detail/CVE-2025-54309"
+  }
+}

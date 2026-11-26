@@ -60,3 +60,55 @@ within that same response. The map displays Natural Earth country geography.
 The ratio is a 2021 population metric and carries no asset-level detail.
 Consult the [source register](source-register.md) for the archived source and
 reproduction command.
+
+## Demo histórica de Shadowserver
+
+La demo usa una transcripción puntual del resumen anual publicado por
+The Shadowserver Foundation el 7 de septiembre de 2026. El artículo
+identifica las siguientes ventanas de observación. Los tres días se
+sirven por separado, con cobertura parcial. La fecha de publicación
+permanece separada de la observación. [Resumen anual de Shadowserver](https://www.shadowserver.org/news/shadowserver-2025-highlights-of-the-year-in-review/)
+
+| Día observado | CVE | Países citados | Unidad original | Recuento nacional publicado en la muestra |
+| --- | --- | --- | --- | --- |
+| 2025-01-09 | CVE-2025-0282 | US, FR, ES | likely vulnerable instances | Ausente |
+| 2025-01-16 | CVE-2024-12084 | US | vulnerable instances | 5 000 en US |
+| 2025-07-20 | CVE-2025-54309 | US, DE, CA | unpatched instances | Ausente |
+
+Las celdas registran las observaciones nacionales explícitas de la
+publicación. Quedan fuera los totales mundiales y las métricas
+de ataques. Cada combinación no documentada de país, CVE y fecha
+muestra «Sin datos». Las CVE distintas se cuentan dentro de la muestra
+del día. Cada día contiene una sola CVE y solo una celda tiene un
+recuento nacional publicado. La muestra no permite estimar una
+correlación entre el número de CVE y el volumen de exposición.
+
+La tarjeta lee las valoraciones de tres fichas oficiales de NVD capturadas
+para la demo. NVD solo aporta atributos globales y se enlaza en la ficha
+junto con el catálogo global autenticado de AEGIS. Shadowserver es la
+única fuente geográfica. Se aplica la misma preferencia de versiones
+CVSS y tipo de valoración del catálogo. [API de vulnerabilidades de NVD](https://nvd.nist.gov/developers/vulnerabilities)
+
+El build completo de Nuxt para Vercel prerenderiza la ruta `/demo/exposure/` y reutiliza
+el panel, coroplético, selectores y navegación del globo. El adaptador
+local tiene un esquema de evidencia distinto del inventario privado.
+El navegador no consulta Shadowserver, AWS ni `/v1/map` para servir la
+muestra. La API privada y sus consumidores conservan los contratos
+existentes. La página no incluye informes privados ni registros de
+endpoints individuales.
+
+Para una comparación cuantitativa hace falta un CSV o JSON agregado
+oficial, o una muestra autorizada para publicar en Preview. Debe aportar
+país ISO 3166-1, día UTC, CVE, grupo de medición, recuento, unidad,
+precisión y cobertura, para varias CVE por país y fecha del mismo grupo.
+La población y ventana deben ser comparables. El enlace público permite
+consultar la investigación original. La política del dashboard restringe
+la extracción automatizada y define la atribución y usos admitidos.
+[Política de uso del dashboard](https://www.shadowserver.org/statistics/)
+
+El workspace incluye el enlace **Exposición a CVE · Demo histórica**.
+Se conserva la navegación al catálogo global en el mismo origen y las
+rutas servidor de sesión e investigaciones. La atribución enlazada
+usa texto. El logo de Shadowserver queda pendiente de autorización
+escrita para su uso en AEGIS.
+[Términos de Shadowserver](https://www.shadowserver.org/privacy-and-terms/)

@@ -42,6 +42,7 @@ export default defineNuxtConfig({
   },
   nitro: { vercel: { functions: { maxDuration: 90 } } },
   routeRules: {
+    '/demo/exposure': { prerender: true },
     '/auth/**': { headers: { 'Cache-Control': 'no-store' } },
     '/admin': { redirect: '/' },
     '/api/**': { headers: { 'Cache-Control': 'no-store' } },
