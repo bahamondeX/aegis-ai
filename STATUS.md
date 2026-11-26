@@ -1501,3 +1501,28 @@ con `AEGIS_BROWSER_RELEASE_AUTH=1` y
 interfaz. Una cuenta aprobada debe completar OB Auth. La prueba registra
 estados HTTP y el origen del callback sin guardar credenciales ni cookies.
 El Preview se sirvió en el plan Hobby, con USD 0 de gasto incremental.
+
+
+## 2026-11-26T13:00:23Z — Globo histórico integrado y publicado en producción
+
+El push de `9d484ec` a `bahamondeX/aegis-ai` actualizó `main` por avance
+rápido. Vercel sirvió el build completo de Nuxt, con sus once funciones
+Nitro, en `dpl_GdtFrubGDKYG9NPc4Jj5b3a3siBm`. El despliegue quedó READY
+antes de su promoción y se verificó el alias de producción.
+[Demo en producción](https://aegis.oscarbahamonde.com/demo/exposure/)
+
+- Preview y producción aprobaron pruebas Chromium autenticadas con OB Auth.
+  Callback 303, cuenta y catálogo 200, navegación entre el workspace y
+  la demo, logout 204 y rechazo 401 de la misma lectura después de salir.
+- La demo en producción devolvió 200 con los mismos bytes del HTML
+  prerenderizado. Aprobaron dos pruebas públicas Chromium, con el globo
+  interactivo, los filtros, la ficha CVE, Sin datos y la lista móvil sin WebGL.
+- Se verificó el plan Hobby activo. El release no creó recursos AWS ni
+  modificó el DNS. `aegis-candidate.vercel.app` conserva
+  `dpl_CPXvFy8tETSmgtFxJ7xY65XNqWVC`.
+- El punto de reversión sigue siendo `dpl_AuZYv1sVrAhmcaYbS3iZDewE66f8`.
+  La atribución enlazada permanece visible. El logo y la comparación entre
+  ventanas comparables conservan los pendientes de la muestra original.
+
+Los recibos, las capturas y los logs sanitizados están en
+`data/evidence/cve-exposure-integration/production-live-20261126/`. El SHA completo del build es `9d484ecc4088910a623d614690bdcdb388cf7b0d`.
