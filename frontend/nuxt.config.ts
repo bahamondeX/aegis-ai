@@ -13,6 +13,10 @@ export default defineNuxtConfig({
     head: {
       title: 'AEGIS · Threat Intelligence',
       meta: [{ name: 'description', content: 'Evidence-backed vulnerability intelligence workspace' }],
+      link: [
+        { rel: 'icon', type: 'image/x-icon', sizes: '32x32', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/png', sizes: '64x64', href: '/favicon.png' },
+      ],
     },
   },
   typescript: {

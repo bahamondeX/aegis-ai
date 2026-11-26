@@ -1,6 +1,6 @@
 # AEGIS AI
 
-![AEGIS](docs/images/aegis.jpeg)
+![AEGIS AI cover with a mint shield and a relief globe](docs/images/aegis-cover.jpg)
 
 AEGIS is a vulnerability intelligence workspace for triaging CVEs and investigating remediation with cited evidence. It combines known exploitation, historical EPSS scores, affected products and weaknesses, and geographic network context in a release-pinned workspace.
 
