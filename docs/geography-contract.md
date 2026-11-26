@@ -112,3 +112,16 @@ rutas servidor de sesión e investigaciones. La atribución enlazada
 usa texto. El logo de Shadowserver queda pendiente de autorización
 escrita para su uso en AEGIS.
 [Términos de Shadowserver](https://www.shadowserver.org/privacy-and-terms/)
+
+La demo solo publica observaciones que el proveedor ya hizo públicas.
+El agregado nacional ausente se conserva como valor desconocido. Los
+filtros seleccionan celdas fijas de la publicación. La selección no
+habilita cómputos cruzados ni totales acumulables. La demo histórica no
+calcula un umbral de celdas pequeñas sobre inventarios. La proyección
+privada de AEGIS para este release queda deshabilitada.
+
+El código de la muestra de este release está en `260602e`. El Preview
+integrado `dpl_CPXvFy8tETSmgtFxJ7xY65XNqWVC` pasó las pruebas públicas de
+Chromium de coroplético, filtros, ficha con cita, «Sin datos» y lista
+móvil sin WebGL. El registro de aceptación del workspace y la promoción
+se mantiene en [STATUS.md](../STATUS.md).

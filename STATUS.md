@@ -1420,3 +1420,84 @@ SHA and revision. `production-before.json` and `production-after.json`
 record the comparison. Acceptance here covers the staging data and
 loopback serving contracts. The hosted V2 chart, hosted identity
 acceptance and production promotion remain pending.
+
+## 2026-11-26T11:50Z — Globo histórico integrado en Vercel Preview
+
+La rama `integrate-cve-exposure` parte de `origin/main` en `44a3a3b`.
+`c0131ed` recupera `frontend/app/` y las rutas de servidor del código
+`b3c6cac`, asociado al despliegue vigente por el comprobante de producción.
+`260602e26c1e1c886d9a4db6fc3b278c340675e5` integra la demo histórica y recupera
+la muestra verificada en `af46163`. La edición ajena de
+`PROMPT_INICIAL_CODEX.md` se conservó en el árbol original.
+
+- Preview integrado `dpl_CPXvFy8tETSmgtFxJ7xY65XNqWVC`.
+  [Demo histórica](https://aegis-candidate.vercel.app/demo/exposure/)
+- Referencia de la demo independiente `dpl_BXBQnpkLUpT9SoJ9Rn1ux5gjNtFp`.
+  [Preview anterior](https://aegis-qf83ssr6b-oscarbahamondedev-gmailcoms-projects.vercel.app/demo/exposure/)
+- Punto de reversión del alias de producción `dpl_AuZYv1sVrAhmcaYbS3iZDewE66f8`.
+  Para revertir una promoción, reasignar únicamente `aegis.oscarbahamonde.com`
+  al [despliegue anterior](https://aegis-obch2x0rg-oscarbahamondedev-gmailcoms-projects.vercel.app)
+  con `vercel alias set` y comprobar el alias, el workspace y los estados
+  de sesión. El Preview anterior del alias `aegis-candidate.vercel.app` es
+  [`dpl_H1YJQacLUq47LsM8ymiSjxS99w1Z`](https://aegis-qxoksrwaw-oscarbahamondedev-gmailcoms-projects.vercel.app).
+- El proyecto `aegis` está activo en Hobby, sin prueba de pago, vinculación
+  Git ni asignación automática del dominio personalizado. El paso de Git
+  por sí solo no publica el release. El alcance incremental es USD 0.
+
+| Comprobación | Resultado | Evidencia relativa a `data/evidence/cve-exposure-integration/` |
+| --- | --- | --- |
+| `corepack pnpm@10.32.1 --dir frontend install --frozen-lockfile` con Node 22.22.3 | PASS, salida 0 | `install.log` |
+| `lint`, `typecheck`, `test` del frontend | PASS, salida 0, cuatro pruebas de contrato | `lint-final.log`, `typecheck-final.log`, `test.log` |
+| Build completo, `NITRO_PRESET=vercel`, cinco flags V2 habilitados | PASS, salida 0, demo prerenderizada y rutas Nitro de sesión y API presentes | `build.log`, `artifact.json` |
+| `vercel deploy --prebuilt --target preview`, alias y HTTP 200 | PASS, salida 0, el HTML servido coincide con el build | `preview-deploy.log`, `preview-alias.log`, `preview-html.html` |
+| `browser tests/browser/shadowserver_demo.spec.ts` en Chromium | PASS, salida 0, dos pruebas. Giro y zoom, país con observación, cambio de métrica, filtros, ficha y cita, Brasil sin datos y móvil sin WebGL | `preview-browser/runner.log` |
+| Capturas públicas sanitizadas de la demo | PASS | `preview-browser/canada-exposicion.png`, `preview-browser/ficha-cve.png`, `preview-browser/brasil-sin-datos.png`, `preview-browser/demo-mobile-sin-webgl.png` |
+
+Muestra nacional parcial de siete celdas en tres días observados de 2025.
+Se conserva la unidad original de cada observación y la publicación del
+2026-09-07. La huella SHA-256 de la transcripción es
+`474400c457fc1f00f9d439ba5c0621065ee6b98bf1338c12d09437553f281b9a`.
+La ficha añade atributos globales de NVD. Quedan pendientes la autorización
+escrita del logo y una muestra comparable para analizar correlación.
+[Publicación de The Shadowserver Foundation](https://www.shadowserver.org/news/shadowserver-2025-highlights-of-the-year-in-review/)
+
+La regresión de backend con el snapshot `4e13ca6b-c2e1-4407-88bc-c362da7dbacb`
+dio inicialmente salida 2 de `make`. Once tests encontraron vistas de DuckDB
+con rutas absolutas del checkout anterior y 81 pasaron. Se reconstruyeron las
+vistas en una copia aislada de los Parquet originales, se validó el manifiesto
+y `make test SNAPSHOT=4e13ca6b-c2e1-4407-88bc-c362da7dbacb` pasó las 92 pruebas
+con salida 0. Evidencia en `backend-regression.log` y
+`backend-regression-rebound.log`. El snapshot original se conserva.
+
+El build local con los flags del entorno de producción dio salida 0.
+`production-artifact.json` confirma la demo y las rutas Nitro de sesión
+y API. `git push --dry-run origin HEAD:refs/heads/main` dio salida 0.
+El SHA remoto observado sigue siendo
+`44a3a3bcc53119c87dc1571b56aa684cba7c8d9b` hasta completar el gate autenticado.
+
+Chromium abrió la ficha de Canadá al pulsar el marcador de su centroide
+(`preview-browser/marker-retry.log`, salida 0). La primera prueba manual
+del marcador agotó el plazo de cinco segundos antes de cargar el canvas.
+El reintento usó el tiempo de carga verificado en la prueba del globo.
+
+La prueba anónima en ambos orígenes registrados confirmó HTTP 200 en
+`/login`, HTTP 303 desde `/auth/login` al proveedor OB Auth con el
+callback exacto y PKCE S256, y HTTP 401 al leer CVE sin sesión.
+`hosted-auth-guard.json` guarda solo los estados y las comprobaciones de
+origen. La prueba autenticada requiere el callback posterior al acceso
+de una cuenta aprobada.
+
+## 2026-11-26T12:10Z — Gate autenticado pendiente
+
+| Comprobación | Resultado | Evidencia relativa a `data/evidence/cve-exposure-integration/` |
+| --- | --- | --- |
+| Callback, workspace, catálogo autenticado y logout posterior | BLOCKED. Los dos primeros intentos cerraron la página antes de confirmar el callback. El último Chromium llegó a OB Auth a las 12:02:47 UTC y terminó su espera sin recibir callback. Cada ejecución terminó con salida 1. | `preview-auth/runner.log`, `preview-auth-retry/runner.log`, `preview-auth-final/auth-ready.json`, `preview-auth-final/runner.log` |
+| Push al remoto | BLOCKED por la aceptación autenticada. El ensayo no modificó GitHub. El remoto sigue en `44a3a3bcc53119c87dc1571b56aa684cba7c8d9b`. | `git-main-dry-run.log` |
+| Producción y reversión | BLOCKED para el nuevo release. El dominio sigue en `dpl_AuZYv1sVrAhmcaYbS3iZDewE66f8`. No hubo promoción ni necesidad de reversión. El Preview sigue en `dpl_CPXvFy8tETSmgtFxJ7xY65XNqWVC`. | Comprobación de ambos alias en la API de Vercel. |
+
+Para reanudar, ejecutar `browser tests/browser/integrated_release_auth.spec.ts`
+con `AEGIS_BROWSER_RELEASE_AUTH=1` y
+`AEGIS_BROWSER_URL=https://aegis-candidate.vercel.app` en Chromium con
+interfaz. Una cuenta aprobada debe completar OB Auth. La prueba registra
+estados HTTP y el origen del callback sin guardar credenciales ni cookies.
+El Preview se sirvió en el plan Hobby, con USD 0 de gasto incremental.
