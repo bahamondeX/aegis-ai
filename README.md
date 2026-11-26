@@ -1,113 +1,171 @@
 # AEGIS AI
 
-![AEGIS AI cover with a mint shield and a relief globe](docs/images/aegis-cover.jpg)
+![Portada de AEGIS AI con un escudo verde y un globo terrestre en relieve](docs/images/aegis-cover.jpg)
 
-AEGIS is a vulnerability intelligence workspace for triaging CVEs and investigating remediation with cited evidence. It combines known exploitation, historical EPSS scores, affected products and weaknesses, and geographic network context in a release-pinned workspace.
+**Inteligencia de vulnerabilidades respaldada por evidencia**
 
-**[Open AEGIS V2](https://aegis.oscarbahamonde.com)** · [Local development](#local-development) · [Architecture](#architecture) · [Data and interpretation](#data-and-interpretation)
+Presentación del producto y ficha técnica · AEGIS V2 · Noviembre de 2026
 
-## What you can do
+[English version](README.en.md) · [Descargar PDF en español](AEGIS-AI-ES.pdf)
 
-- **Triage vulnerabilities.** Search by CVE, inspect CISA KEV status and reported severity, and follow product and weakness relationships back to their sources.
-- **Explore EPSS history.** Select a date range, inspect changes in exploitation probability, and see upstream gaps and model transitions.
-- **Explore network context.** Switch between global WDI/ITU mobile subscription data and historical Canadian CRTC LTE population coverage. Each layer identifies its source and units.
-- **Investigate remediation.** Start an investigation from a CVE, follow progress as it streams, and inspect the evidence behind the report. Review and edit a SOC/CSIRT handoff before sharing it yourself.
+**[Abrir AEGIS](https://aegis.oscarbahamonde.com/)** · **[Explorar el globo de exposición](https://aegis.oscarbahamonde.com/demo/exposure/)**
 
-## Production access
+## Resumen del producto
 
-[Sign in to AEGIS](https://aegis.oscarbahamonde.com/login) through OB Auth. Google sign-in requires a verified email. Email and password require a verified email and a TOTP code from an authenticator app. AEGIS checks workspace membership and resource ownership on the server. [OB Auth SDK](https://github.com/bahamondeX/ob-auth)
+AEGIS reúne información sobre vulnerabilidades de software en un espacio de trabajo
+que ayuda a responder tres preguntas. **¿Qué merece atención primero? ¿Qué sabemos
+con certeza? ¿Qué podemos hacer al respecto?** Cada investigación permite consultar
+las fuentes que respaldan sus conclusiones.
 
-The production UI runs on Vercel and uses a regional AWS API Gateway for FastAPI and investigation streaming. The previous CloudFront workspace is retained for rollback. The verified cutover is recorded in commit `7aecbcc` on `v2-ob-auth-vercel`.
+### El problema
 
-## Architecture
+Los avisos de fabricantes, los registros de vulnerabilidades y las señales de
+explotación suelen consultarse por separado. Una falla puede tener una gravedad alta,
+una probabilidad estimada baja o evidencia de que ya se está explotando. Cada señal
+sirve para una decisión distinta. Cuando esa información se combina sin conservar
+su contexto, cuesta explicar por qué conviene atender un caso antes que otro.
 
-```mermaid
-flowchart LR
-    feeds["CISA KEV, FIRST EPSS, NVD, CVE Program"] --> ingest["Python / Polars ingestion"]
-    ingest --> bronze["Versioned artifacts and receipts on S3"]
-    bronze --> silver["Apache Iceberg / AWS Glue"]
-    silver --> gold["Release-pinned S3 projections"]
-    silver --> athena["Amazon Athena"]
-    ingest --> duckdb["DuckDB for local development"]
+### Cómo ayuda AEGIS
 
-    browser["Browser"] <-->|HTTPS| ui["Nuxt / Nitro on Vercel"]
-    ui <-->|Session and grant validation| auth["OB Auth"]
-    ui <-->|Regional API Gateway / SSE| api["FastAPI on AWS Lambda"]
-    api --> athena
-    api --> gold
-    api <-->|IAM-authenticated invocation| agent["AgentCore / LangGraph"]
-    agent --> tools["Typed MCP reads"]
-    tools --> athena
-    tools --> gold
-    agent --> model["Amazon Bedrock"]
-```
-
-The four-node investigation workflow plans the request, retrieves bounded evidence, builds its analysis, and validates cited claims. The API streams progress and results over SSE. Investigations support cancellation and owner-scoped replay. The V2 serving layer reuses immutable inputs and pins the relevant Iceberg and S3 versions so a report can be traced to its source release.
-
-## Data and interpretation
-
-| Verified V2 release | Coverage |
+| Necesidad | Qué ofrece AEGIS |
 | --- | --- |
-| Vulnerability catalog | **431,133 distinct CVEs** across the pinned NVD and CVE Program captures |
-| EPSS history | **465,857,152 scores** across **2,042 available dates** from April 14, 2021 through November 24, 2026. Nine upstream dates are absent. |
-| WDI/ITU network context | **217 economies** in the reference dimension. **151** have a reported value for 2024. |
-| Canadian CRTC network context | Historical **2021 LTE population coverage** at national, provincial and territorial levels |
-| Geographic CVE exposure | **Unavailable** in the verified release. Private site and SOC incident layers are disabled. |
+| Decidir qué revisar primero | Un catálogo que distingue gravedad, probabilidad estimada y explotación conocida. |
+| Entender el alcance de una falla | Una ficha con productos, versiones y debilidades relacionadas cuando la fuente las documenta. |
+| Explicar una recomendación | Una investigación que enlaza la evidencia consultada y señala qué información falta. |
+| Coordinar el siguiente paso | Un borrador de traspaso para que el equipo lo revise y comparta por su canal habitual. |
 
-EPSS estimates the probability of exploitation activity over the next 30 days. KEV records vulnerabilities with evidence of known exploitation. CVSS describes severity. These metrics answer different questions and retain their source and date. WDI/ITU measures mobile subscriptions per 100 people and may exceed 100. CRTC measures the share of population covered by an LTE network. The map preserves the distinction between missing coverage and a measured zero. [Source register](docs/source-register.md) · [Data dictionary](docs/data-dictionary.md) · [Time-series rules](docs/timeseries.md)
+Está pensado para equipos de seguridad, infraestructura y gestión de riesgos.
+Un analista puede revisar las fuentes y las versiones afectadas. Un responsable de
+operaciones puede leer la recomendación, entender por qué importa y asignar el
+siguiente paso.
 
-## Local development
+### Un recorrido típico
 
-Use native Apple Silicon, Python 3.12 via `uv`, Node 22.22.3, pnpm 10.32.1, and AWS CLI v2 for the toolchain preflight. The local API runs against DuckDB. The quickstart captures the smaller KEV-focused development dataset with bounded NVD enrichment.
+1. Busca el identificador de una vulnerabilidad y abre su ficha.
+2. Revisa qué productos podrían verse afectados, si hay explotación documentada
+   y cómo ha cambiado la probabilidad estimada.
+3. Lanza una investigación de mitigación y consulta el respaldo de cada recomendación.
+4. Revisa el borrador y decide cómo escalar o compartir el caso.
+
+El globo público permite explorar observaciones históricas de exposición por país.
+La demo muestra la fuente, la fecha y la unidad de cada observación. **Sin datos**
+significa que la muestra carece de evidencia para esa selección.
+[Demo interactiva](https://aegis.oscarbahamonde.com/demo/exposure/) ·
+[Publicación de Shadowserver](https://www.shadowserver.org/news/shadowserver-2025-highlights-of-the-year-in-review/)
+
+---
+
+## Ficha técnica
+
+### Arquitectura y stack
+
+| Componente | Tecnología | Función |
+| --- | --- | --- |
+| Interfaz | Nuxt 4, Vue 3, TypeScript, Tailwind y Vercel | Workspace, catálogo, visualizaciones y rutas de sesión en Nitro. |
+| Ingesta y normalización | Python 3.12, Polars y PyArrow | Captura fuentes, valida esquemas y normaliza registros a Parquet. |
+| Análisis local | DuckDB | Reproduce consultas sobre capturas fijadas y verifica resultados. |
+| Plataforma de datos | Amazon S3, Apache Iceberg, AWS Glue y Athena | Conserva artefactos, versiona tablas y sirve lecturas analíticas. |
+| API | FastAPI, Pydantic, API Gateway regional y AWS Lambda | Valida consultas, aplica autorización y transmite la respuesta. |
+| Investigaciones | LangGraph, MCP, Amazon Bedrock y AgentCore | Orquesta lecturas de evidencia y valida el informe antes de emitirlo. |
+| Identidad | OB Auth, Amazon Cognito y OAuth con PKCE S256 | Gestiona sesiones, verificación de correo y control de acceso. |
+| Infraestructura y pruebas | AWS CDK, pytest, Ruff, mypy y Playwright | Define recursos y verifica contratos, tipos y recorridos de usuario. |
+
+[Runbook de hosting](docs/hosting.md) · [Plataforma de datos](docs/v2-cloud-lakehouse.md) ·
+[Contratos de consulta](docs/serving-contracts.md)
+
+### Enfoque de datos e investigación
+
+**Captura reproducible.** Se conservan la fecha de origen, los artefactos y sus
+sumas de verificación. El catálogo unifica identificadores CVE y mantiene la
+procedencia de las valoraciones. Las consultas y las investigaciones trabajan
+sobre versiones fijadas de los datos, de modo que una actualización de una
+fuente no altere la evidencia de una investigación en curso.
+
+**Análisis con respaldo.** LangGraph planifica, recupera evidencia mediante
+consultas tipadas, analiza y valida en cuatro pasos. Cuando se usa Bedrock,
+el modelo selecciona afirmaciones entre hechos ya recuperados. El sistema
+comprueba los identificadores de evidencia antes de emitir el informe. La
+investigación comunica el progreso con SSE y admite cancelación y reanudación
+del flujo por su propietario. El borrador de mitigación queda bajo revisión humana.
+[Diseño de investigaciones](docs/g4-investigations.md)
+
+**Acceso delimitado.** El workspace requiere una sesión válida de OB Auth.
+Google requiere correo verificado. El acceso con correo y contraseña añade
+un código de la aplicación autenticadora. La API aplica la pertenencia al
+workspace y la propiedad de los recursos en el servidor. La demo geográfica
+es pública. El catálogo y las investigaciones del workspace requieren sesión.
+[Identidad y autorización](docs/identity-management.md)
+
+### Fuentes y cobertura verificada
+
+| Señal | Qué aporta | Alcance documentado |
+| --- | --- | --- |
+| CVE Program y NVD | Identidad, descripción, gravedad CVSS y condiciones de producto | 431.133 CVE distintas en el catálogo fijado. |
+| FIRST EPSS | Probabilidad estimada de explotación en los próximos 30 días | 465.857.152 puntuaciones en 2.042 fechas disponibles entre 2021-04-14 y 2026-11-24. Nueve fechas faltan en la fuente. |
+| CISA KEV | Evidencia de explotación conocida | Se conserva la procedencia de la inclusión de cada CVE. |
+| Shadowserver | Exposición geográfica observada en una muestra histórica | Siete observaciones nacionales, cinco países y tres fechas de 2025. Cobertura parcial. |
+
+CVSS describe gravedad. EPSS estima probabilidad. KEV registra explotación
+conocida. El globo muestra observaciones geográficas según el alcance publicado.
+La muestra de Shadowserver conserva los recuentos nacionales desconocidos y las
+unidades originales. Sirve para explorar casos históricos con evidencia, con
+cobertura parcial y sin inventario privado en la demo.
+[Registro de fuentes](docs/source-register.md) · [Series temporales](docs/timeseries.md) ·
+[Contrato geográfico](docs/geography-contract.md#demo-histórica-de-shadowserver)
+
+### Verificación registrada
+
+- **Producción, 26 de noviembre de 2026.** Chromium verificó el retorno de OB Auth,
+  el dashboard, la lectura autenticada del catálogo y la denegación de la misma
+  consulta tras cerrar sesión. Dos pruebas públicas cubrieron el globo y la lista
+  móvil sin WebGL.
+- **Regresión de la integración.** El registro del release documenta 92 pruebas
+  de backend y cuatro pruebas de contrato de frontend, además de lint,
+  comprobación de tipos y el build completo de Vercel.
+- **Calidad de respuesta.** Una evaluación histórica con Nova Micro registró
+  siete de siete afirmaciones respaldadas en dos investigaciones de mitigación.
+  El resultado corresponde a esas ejecuciones y su evidencia fijada.
+
+[Registro de publicación y aceptación](STATUS.md) · [Evaluación y mediciones](docs/evaluation.md)
+
+## Desarrollo local
+
+Usa Python 3.12 con `uv`, Node 22.22.3 y pnpm 10.32.1. El preflight comprueba
+las herramientas del entorno macOS ARM64, incluido AWS CLI v2. Este recorrido
+usa el conjunto local acotado de CISA KEV con enriquecimiento NVD.
 
 ```sh
 make preflight
 make bootstrap
 make ingest-local
 make validate-data
-make query-local
 make smoke-local
-```
-
-To reuse a local capture, add `SNAPSHOT=<run-uuid>` to `validate-data`, `query-local`, `test`, `dev` or `verify-phase1`. Raw captures, Parquet, DuckDB and test evidence are generated under the Git-ignored `data/` directory by default. Optional source keys can go in the environment or a Git-ignored `.env` with mode `600`. Anonymous NVD access is supported. [.env.example](.env.example) · [Bulk V2 ingestion](docs/v2-ingestion.md)
-
-### Run the local API
-
-```sh
 make dev
 ```
 
-FastAPI listens at `http://127.0.0.1:8000`. Open `/docs` for the REST schema or use the Streamable HTTP MCP endpoint at `/mcp/`. The server writes a 15-minute development bearer token to `data/local-api.token` by default.
-
-```sh
-(printf 'Authorization: Bearer ' && cat data/local-api.token) |
-  curl --noproxy '*' --fail --silent --show-error --header @- http://127.0.0.1:8000/v1/kpis
-```
-
-Run `make lint typecheck test` for the backend checks and `make smoke-investigation` for the pinned local investigation and SSE path. `make verify-phase1` replays the capture and compares generated Parquet checksums, counts and sampled DuckDB results.
-
-### Run the V2 UI locally
-
-Use a checkout containing the V2 release tree at `7aecbcc`. Run `make bootstrap`, `make ingest-local` and `make dev` there, or point that checkout at an existing local capture using `AEGIS_DATA_DIR` and `AEGIS_SNAPSHOT`. Start Nuxt in a second terminal in the same checkout.
+FastAPI escucha en `http://127.0.0.1:8000`. Su documentación está en `/docs`
+y MCP Streamable HTTP está en `/mcp/`. El servidor imprime la ruta de un token
+de desarrollo de 15 minutos. Inicia Nuxt en otra terminal.
 
 ```sh
 make frontend-install
 NUXT_PUBLIC_LOCAL_TOKEN_AUTH=true sh scripts/frontend.sh dev
 ```
 
-Open `http://localhost:3000` and enter the development token written by the local API. The token path is printed when the API starts. The development UI uses the local snapshot. The hosted catalog and full EPSS archive are served from AWS.
+Abre `http://localhost:3000` e introduce el token de desarrollo. Para una
+captura existente, selecciona su identificador con `SNAPSHOT=<run-uuid>` en
+los comandos de Make compatibles. Las capturas y la evidencia local se
+generan en `data/` por defecto. La aplicación alojada consulta el catálogo
+y el histórico de producción en AWS.
+[Configuración de ejemplo](.env.example) · [Ingesta V2](docs/v2-ingestion.md)
 
-## Verification and operations
+## Recursos y atribución
 
-The November 25, 2026 release record reports **106 Python tests and four frontend contract tests** passing. Hosted Chromium verified the production callback, the catalog and EPSS reads, logout and revocation, and eight ordered SSE events with a single terminal event. The recorded production investigation reached its first event in **1.545 s** and completed in **4.996 s**. Those timings describe one run.
-
-| Topic | Reference |
-| --- | --- |
-| Release verification | [Execution history](STATUS.md) and [evaluation matrix](docs/evaluation.md). For the Vercel cutover entries, run `git show 7aecbcc:STATUS.md` and `git show 7aecbcc:docs/evaluation.md`. |
-| Deployment, identity and rollback | [Hosting](docs/hosting.md) and [identity management](docs/identity-management.md). The Vercel and OB Auth procedures are in those files at `7aecbcc`. |
-| Data and costs | [Cloud lakehouse](docs/v2-cloud-lakehouse.md), [serving contracts](docs/serving-contracts.md) and [cost model](docs/v2-cost-model.md) |
-| Investigation and demo | [Investigation runbook](docs/g4-investigations.md), [demo script](docs/final-demo.md) and [technical case study](docs/case-study.md) |
-
-## Source attribution
-
-CISA KEV is distributed under CC0-1.0. EPSS scores are produced by Empirical Security and maintained by the FIRST EPSS SIG. This product uses data from the NVD API but is not endorsed or certified by the NVD. [KEV license](https://github.com/cisagov/kev-data/blob/develop/LICENSE) · [FIRST EPSS data](https://www.first.org/epss/data) · [NVD](https://nvd.nist.gov/)
+- [Guía de demostración](docs/final-demo.md) y [runbook de investigaciones](docs/g4-investigations.md).
+- [Diccionario de datos](docs/data-dictionary.md) y [modelo de costos](docs/v2-cost-model.md).
+- CISA KEV se distribuye bajo CC0-1.0. FIRST EPSS publica las puntuaciones con su
+  atribución. AEGIS usa datos de la API de NVD sin aval ni certificación de NVD.
+  [Licencia de KEV](https://github.com/cisagov/kev-data/blob/develop/LICENSE) ·
+  [FIRST EPSS](https://www.first.org/epss/data) · [NVD](https://nvd.nist.gov/).
+- Las observaciones geográficas públicas se atribuyen a The Shadowserver Foundation.
+  [Fuente de la muestra](https://www.shadowserver.org/news/shadowserver-2025-highlights-of-the-year-in-review/).
