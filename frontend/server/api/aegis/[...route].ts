@@ -1,44 +1,52 @@
-import { createHash } from 'node:crypto'
-
-const reads = /^(health|v1\/(coverage|cves(?:\/CVE-\d{4}-\d{4,24})?|kpis|graph|map|evidence\/[a-f0-9]{64}))$/
-const cancellation = /^v1\/investigations\/([a-f0-9-]{36})\/cancel$/
+const reads = /^(v2\/(network|catalog|analytics\/epss|cves\/CVE-\d{4}-\d{4,24})|v1\/(account|coverage|cves(?:\/CVE-\d{4}-\d{4,24})?|kpis|graph|map|evidence\/[a-f0-9]{64}))$/
+const actions = /^v1\/(investigations(?:\/[a-f0-9-]{36}\/cancel)?)$/
 
 export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'Cache-Control', 'no-store')
   const route = getRouterParam(event, 'route') || ''
   const method = getMethod(event)
-  const cancel = cancellation.exec(route)
-  const investigating = method === 'POST' && (route === 'v1/investigations' || cancel)
-  if (!(method === 'GET' && reads.test(route)) && !investigating) {
+  if (!(method === 'GET' && reads.test(route)) && !(method === 'POST' && actions.test(route))) {
     throw createError({ statusCode: 404, statusMessage: 'Unknown AEGIS operation' })
   }
-  const bearer = getHeader(event, 'authorization') || ''
-  if (route !== 'health' && !/^Bearer [A-Za-z0-9._-]{1,8192}$/.test(bearer)) {
-    throw createError({ statusCode: 401, statusMessage: 'A valid access token is required' })
-  }
   const config = useRuntimeConfig(event)
-  const base = new URL(config.aegisApiBase)
-  const headers = new Headers({ Accept: 'application/json' })
+  const local = import.meta.dev && config.public.localTokenAuth
+  if (method === 'POST') {
+    if (local) {
+      if (getHeader(event, 'origin') !== getRequestURL(event).origin) {
+        throw createError({ statusCode: 403, statusMessage: 'Unapproved application origin' })
+      }
+    } else verifyWorkspaceOrigin(event)
+  }
+  const bearer = local ? getHeader(event, 'authorization') : await workspaceAssertion(event)
+  let base: URL
+  try {
+    base = new URL(local ? config.localApiBase : config.aegisApiBase)
+  } catch {
+    throw createError({ statusCode: 503, statusMessage: 'Invalid AEGIS API destination' })
+  }
+  const allowed = local
+    ? base.protocol === 'http:' && base.hostname === '127.0.0.1'
+    : base.protocol === 'https:' && /^[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com$/.test(base.host)
+      && /^\/[a-z0-9_-]+\/?$/.test(base.pathname)
+  if (!allowed || base.username || base.password || base.search || base.hash) {
+    throw createError({ statusCode: 503, statusMessage: 'Invalid AEGIS API destination' })
+  }
+  const prefix = local ? '' : base.pathname.replace(/\/$/, '') + '/api/aegis'
+  const target = new URL(prefix + '/' + route, base.origin)
+  const streaming = route === 'v1/investigations'
+  const headers = new Headers({
+    Accept: streaming ? 'text/event-stream' : 'application/json',
+  })
   if (bearer) headers.set('Authorization', bearer)
-  let target = new URL('/' + route, base)
   let body: string | undefined
-  if (investigating) {
-    headers.set('Content-Type', 'application/json')
-    headers.set('Accept', cancel ? 'application/json' : 'text/event-stream')
+  if (method === 'POST') {
     for (const key of ['Idempotency-Key', 'Last-Event-ID']) {
       const value = getHeader(event, key)
       if (value) headers.set(key, value)
     }
-    const data: unknown = cancel ? undefined : await readBody(event)
-    body = data === undefined ? undefined : JSON.stringify(data)
-    if (config.aegisRuntimeUrl) {
-      target = new URL(config.aegisRuntimeUrl)
-      if (target.protocol !== 'https:' || !/^bedrock-agentcore\.[a-z0-9-]+\.amazonaws\.com$/.test(target.hostname)) {
-        throw createError({ statusCode: 500, statusMessage: 'Invalid AgentCore destination' })
-      }
-      const session = createHash('sha256').update(bearer)
-        .update(headers.get('Idempotency-Key') || 'cancel').digest('hex')
-      headers.set('X-Amzn-Bedrock-AgentCore-Runtime-Session-Id', session)
-      if (cancel) body = JSON.stringify({ action: 'cancel', investigation_id: cancel[1] })
+    if (!route.endsWith('/cancel')) {
+      headers.set('Content-Type', 'application/json')
+      body = JSON.stringify(await readBody(event))
     }
   } else {
     for (const [key, value] of Object.entries(getQuery(event))) {
@@ -53,18 +61,24 @@ export default defineEventHandler(async (event) => {
     if (!event.node.res.writableEnded) abort.abort()
   }
   event.node.res.once('close', disconnected)
-  let upstream: Response
   try {
-    upstream = await fetch(target, {
+    const upstream = await fetch(target, {
       method, headers, body, redirect: 'error',
-      signal: AbortSignal.any([abort.signal, AbortSignal.timeout(65_000)]),
+      signal: AbortSignal.any([abort.signal, AbortSignal.timeout(72_000)]),
     })
+    setResponseStatus(event, upstream.status)
+    setResponseHeader(event, 'Content-Type', upstream.headers.get('Content-Type') || 'application/json')
+    if (streaming) setResponseHeader(event, 'X-Accel-Buffering', 'no')
+    if (upstream.body) return await sendStream(event, upstream.body)
+    return ''
   } catch {
+    if (abort.signal.aborted) return
+    if (event.node.res.headersSent) {
+      event.node.res.destroy()
+      return
+    }
     throw createError({ statusCode: 502, statusMessage: 'AEGIS service is unavailable' })
+  } finally {
+    event.node.res.off('close', disconnected)
   }
-  setResponseStatus(event, upstream.status)
-  setResponseHeader(event, 'Cache-Control', 'no-store')
-  setResponseHeader(event, 'Content-Type', upstream.headers.get('Content-Type') || 'application/json')
-  if (!upstream.body) return ''
-  return sendStream(event, upstream.body)
 })

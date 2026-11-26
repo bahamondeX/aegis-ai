@@ -11,12 +11,19 @@ const validate = ajv.compile<InvestigationEvent>(eventSchema)
 const maximumFrame = 256 * 1024
 const day = 86_400_000
 
+export interface HistorySelection {
+  release_id: string
+  date_from: string
+  date_to: string
+}
+
 interface InvestigationRequest {
   question: string
   scope?: 'global' | 'regional'
   filters?: Filters
   snapshot_id?: string
   mitigation?: MitigationContext
+  history?: HistorySelection
 }
 
 interface StreamOptions {
@@ -101,7 +108,7 @@ export async function* decodeInvestigation(
 
 export async function* readInvestigation(options: StreamOptions): AsyncGenerator<InvestigationEvent> {
   const headers = {
-    Authorization: `Bearer ${options.token}`,
+    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     Accept: 'text/event-stream',
     'Content-Type': 'application/json',
     'Idempotency-Key': options.key,

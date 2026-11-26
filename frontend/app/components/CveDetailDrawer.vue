@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { CveDetail } from '../../investigations/geography'
 
-const props = defineProps<{ detail?: CveDetail; loading: boolean; error: string; disabled: boolean }>()
+const props = defineProps<{ detail?: CveDetail; profileId?: string; loading: boolean; error: string; disabled: boolean }>()
 const emit = defineEmits<{ close: []; mitigate: [detail: CveDetail]; inspect: [id: string] }>()
 const dialog = ref<HTMLDialogElement>()
-const open = computed(() => props.loading || !!props.error || !!props.detail)
+const open = computed(() => props.loading || !!props.error || !!props.detail || !!props.profileId)
 const applicability = computed(() => {
   const groups = new Map<string, { version: string; row: CveDetail['applicability'][number]; count: number }>()
   for (const row of props.detail?.applicability ?? []) {
@@ -34,7 +34,7 @@ watch(open, async (visible) => {
 <template>
   <dialog ref="dialog" class="panel cve-detail" aria-label="CVE detail" @cancel.prevent="emit('close')">
     <header>
-      <h2>{{ detail?.vulnerability.cve_id ?? 'CVE detail' }}</h2>
+      <h2>{{ detail?.vulnerability.cve_id ?? profileId ?? 'CVE detail' }}</h2>
       <button type="button" class="text-button" @click="emit('close')">Close</button>
     </header>
     <p v-if="loading" role="status">Verifying the selected CVE…</p>
@@ -79,5 +79,6 @@ watch(open, async (visible) => {
         How to mitigate
       </UButton>
     </template>
+    <CveSourceProfile v-if="profileId" :cve="profileId" />
   </dialog>
 </template>

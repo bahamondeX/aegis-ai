@@ -1,9 +1,13 @@
+import { createHmac, randomUUID } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
 const target = process.env.AEGIS_BROWSER_URL
 const fixture = process.env.AEGIS_BROWSER_HOSTED_FIXTURE
+const v2 = process.env.AEGIS_BROWSER_EXPECT_V2 === '1'
+const historicalAgent = process.env.AEGIS_BROWSER_EXPECT_HISTORY_AGENT === '1'
+const authenticator = process.env.AEGIS_BROWSER_EXPECT_AUTHENTICATOR === '1'
 const publicOnly = process.env.AEGIS_BROWSER_PUBLIC_ONLY === '1'
 const evidence = process.env.AEGIS_BROWSER_EVIDENCE || '../data/evidence/final'
 
@@ -26,6 +30,16 @@ function decode(body: string): Frame[] {
 }
 
 async function login(page: Page, account: Credentials): Promise<string> {
+  if (authenticator) {
+    await page.goto('/login')
+    const accountRequest = page.waitForRequest(r => r.url().endsWith('/api/aegis/v1/account'))
+    await page.getByLabel('Username').fill(account.username)
+    await page.getByLabel('Password').fill(account.password)
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+    const bearer = (await (await accountRequest).allHeaders()).authorization
+    if (!bearer?.startsWith('Bearer ')) throw new Error('Cognito did not supply an access token')
+    return bearer
+  }
   await page.goto('/')
   const authorization = page.waitForRequest(r => new URL(r.url()).pathname === '/oauth2/authorize')
   const accountRequest = page.waitForRequest(r => r.url().endsWith('/api/aegis/v1/account'))
@@ -46,6 +60,189 @@ async function login(page: Page, account: Credentials): Promise<string> {
   return bearer
 }
 
+test('Authenticator public entry point redirects the former admin page', async ({ page, request }) => {
+  test.skip(!target?.startsWith('https://') || !authenticator)
+  const home = await page.goto('/')
+  expect(home?.status()).toBe(200)
+  expect(home?.headers()['strict-transport-security']).toContain('max-age=')
+  await expect(page.getByRole('heading', { name: 'Threat command center.' })).toBeVisible()
+  expect(await page.evaluate(() => [...document.body.childNodes]
+    .filter(node => node.nodeType === Node.TEXT_NODE)
+    .map(node => node.textContent?.trim())
+    .filter(Boolean))).toEqual([])
+  await page.getByRole('link', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Sign in to AEGIS' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Register with email' })).toBeVisible()
+  await page.screenshot({ path: join(evidence, 'login-desktop.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await page.screenshot({ path: join(evidence, 'login-mobile.png') })
+  const admin = await request.get('/admin', { maxRedirects: 0 })
+  expect(admin.status()).toBe(302)
+  expect(new URL(admin.headers().location!, target).pathname).toBe('/')
+  expect((await request.get('/api/aegis/v1/admin/users')).status()).toBe(404)
+  expect((await request.get('/api/aegis/v1/coverage')).status()).toBe(401)
+  const google = page.waitForRequest(r => {
+    const url = new URL(r.url())
+    return r.isNavigationRequest() && url.hostname === 'accounts.google.com'
+      && url.pathname === '/o/oauth2/v2/auth'
+  })
+  await page.getByRole('button', { name: 'Continue with Google' }).click()
+  const redirect = new URL((await google).url()).searchParams.get('redirect_uri')
+  expect(new URL(redirect!).pathname).toBe('/oauth2/idpresponse')
+})
+
+function authenticatorCode(key: string, step: number): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  const bits = [...key].map(value => alphabet.indexOf(value).toString(2).padStart(5, '0')).join('')
+  const secret = Buffer.from(bits.match(/.{8}/g)!.map(value => Number.parseInt(value, 2)))
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(step))
+  const hash = createHmac('sha1', secret).update(counter).digest()
+  return ((hash.readUInt32BE(hash.at(-1)! & 15) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0')
+}
+
+test('Authenticator pilot checks the hosted session and streams one pinned analysis', async ({ page, request, browser }) => {
+  test.skip(!target?.startsWith('https://') || !authenticator || !fixture)
+  // Credentials and recovery codes stay in the browser test process.
+  test.setTimeout(210_000)
+  const scoped = JSON.parse(await readFile(fixture!, 'utf8')) as HostedFixture
+  const account = '/api/aegis/v1/account'
+  const coverage = '/api/aegis/v1/coverage'
+  const investigation = {
+    snapshot_id: scoped.snapshot,
+    question: 'Prioritize known exploited vulnerabilities',
+  }
+  const first = await login(page, scoped.users.foreign)
+  const headers = (bearer: string) => ({ Authorization: bearer })
+  const readCoverage = (bearer: string) => request.get(coverage, { headers: headers(bearer) })
+  const direct = (bearer: string, runtime = scoped.runtime) => request.post(runtime, {
+    headers: {
+      Authorization: bearer,
+      'Idempotency-Key': randomUUID(),
+      'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': randomUUID(),
+    },
+    data: investigation,
+  })
+  const group = (tab: Page) => tab.getByRole('region', { name: 'Verify with Authenticator' })
+  const sendCode = async (tab: Page, code: string) => {
+    await group(tab).getByLabel('Six-digit code').fill(code)
+    const verification = tab.waitForResponse(response => response.url().endsWith(account + '/mfa/verify'))
+    await group(tab).getByRole('button', { name: 'Verify code' }).click()
+    return (await verification).status()
+  }
+  const setupKey = async (tab: Page) => {
+    const value = group(tab).locator('p code')
+    await expect(value).toBeVisible()
+    return (await value.textContent())?.trim() ?? ''
+  }
+  const step = () => Math.floor(Date.now() / 30_000)
+  const signOut = async (tab: Page) => {
+    const hostedLogout = tab.waitForResponse(response => {
+      const url = new URL(response.url())
+      return url.hostname.endsWith('.amazoncognito.com') && url.pathname === '/logout'
+    })
+    await tab.getByRole('button', { name: 'Sign out', exact: true }).click()
+    await hostedLogout
+    await expect(tab.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+  }
+  const apiBefore = await readCoverage(first)
+  expect(apiBefore.status()).toBe(403)
+  expect((await apiBefore.json()).error.code).toBe('mfa_required')
+  const runtimeBefore = await direct(first)
+  expect([403, 424]).toContain(runtimeBefore.status())
+  if (runtimeBefore.status() === 424) expect(await runtimeBefore.text()).toMatch(/403|mfa_required/)
+  const legacy = new URL(scoped.runtime)
+  legacy.searchParams.set('qualifier', '1')
+  const legacyContext = await browser.newContext({ baseURL: target })
+  let legacyStatus: number
+  try {
+    const approved = await login(await legacyContext.newPage(), scoped.users.member)
+    const oldVersion = await direct(approved, legacy.href)
+    legacyStatus = oldVersion.status()
+    expect(oldVersion.ok()).toBe(false)
+  } finally { await legacyContext.close() }
+  await group(page).getByRole('button', { name: 'Set up Authenticator' }).click()
+  const key = await setupKey(page)
+  const firstStep = step()
+  const firstCode = authenticatorCode(key, firstStep)
+  expect(await sendCode(page, firstCode)).toBe(200)
+  const codes = group(page).locator('li code')
+  await expect(codes).toHaveCount(8)
+  const recovery = (await codes.first().textContent())?.trim() ?? ''
+  await page.getByRole('button', { name: 'I saved my recovery codes' }).click()
+  await expect(page.getByRole('heading', { name: 'Threat command center.' })).toBeVisible()
+  const avatarStyle = await page.locator('.avatar').getAttribute('style')
+  await expect(page.locator('.avatar .avatar-mark')).toBeVisible()
+  expect((await readCoverage(first)).status()).toBe(200)
+  expect((await request.get('/api/aegis/v1/admin/users', { headers: headers(first) })).status()).toBe(404)
+  expect((await request.post('/api/aegis/v1/admin/users/' + scoped.users.member.username, {
+    headers: headers(first), data: { action: 'approve' },
+  })).status()).toBe(404)
+  expect((await request.post(account + '/photo', { headers: headers(first), data: {} })).status()).toBe(404)
+  await signOut(page)
+  expect((await readCoverage(first)).status()).toBe(401)
+
+  const second = await login(page, scoped.users.foreign)
+  expect((await readCoverage(second)).status()).toBe(403)
+  expect(await sendCode(page, firstCode)).toBe(403)
+  const accepted = new Set([step() - 1, step(), step() + 1].map(value => authenticatorCode(key, value)))
+  const wrong = ['000000', '111111', '222222', '333333'].find(value => !accepted.has(value))!
+  expect(await sendCode(page, wrong)).toBe(403)
+  while (step() <= firstStep) await new Promise(resolve => setTimeout(resolve, 500))
+  expect(await sendCode(page, authenticatorCode(key, step()))).toBe(200)
+  await expect(page.locator('.avatar')).toHaveAttribute('style', avatarStyle!)
+  const history = page.getByRole('region', { name: 'EPSS history' })
+  await expect(history.getByLabel('Inspect EPSS date')).toBeVisible()
+  await expect(history).toHaveAttribute('aria-busy', 'false')
+  await history.getByLabel('EPSS start date').fill('2021-04-20')
+  await history.getByLabel('EPSS end date').fill('2021-04-23')
+  await history.getByRole('button', { name: 'Apply date range' }).click()
+  await expect(history).toContainText('2 observed days · 2 dates absent from the source')
+  const streamed = page.waitForResponse(response =>
+    response.request().method() === 'POST' && response.url().endsWith('/api/aegis/v1/investigations'))
+  await history.getByRole('button', { name: 'Analyze selected EPSS dates' }).click()
+  const stream = await streamed
+  expect(stream.status()).toBe(200)
+  expect(stream.headers()['content-type']).toContain('text/event-stream')
+  const frames = decode(await stream.text())
+  expect(frames.map(frame => frame.seq)).toEqual(frames.map((_, index) => index + 1))
+  expect(frames.filter(frame => frame.type === 'done')).toHaveLength(1)
+  expect(frames.at(-1)?.payload.status).toBe('completed')
+
+  const other = await browser.newContext({ baseURL: target })
+  try {
+    const recoveryPage = await other.newPage()
+    const third = await login(recoveryPage, scoped.users.foreign)
+    await group(recoveryPage).getByRole('button', { name: 'Use a recovery code' }).click()
+    await group(recoveryPage).getByLabel('Recovery code').fill(recovery)
+    await group(recoveryPage).getByRole('button', { name: 'Set up Authenticator' }).click()
+    const replacement = await setupKey(recoveryPage)
+    expect(replacement === key).toBe(false)
+    expect((await readCoverage(second)).status()).toBe(403)
+    expect((await readCoverage(third)).status()).toBe(403)
+    expect(await sendCode(recoveryPage, authenticatorCode(replacement, step()))).toBe(200)
+    await expect(group(recoveryPage).locator('li code')).toHaveCount(8)
+    expect((await readCoverage(third)).status()).toBe(200)
+    expect((await request.post(account + '/mfa/setup', {
+      headers: headers(third), data: { recovery },
+    })).status()).toBe(403)
+    await recoveryPage.getByRole('button', { name: 'I saved my recovery codes' }).click()
+    await signOut(recoveryPage)
+    expect((await readCoverage(third)).status()).toBe(401)
+  } finally { await other.close() }
+
+  await writeFile(join(evidence, 'authenticator-pilot.json'), JSON.stringify({
+    verified_email_fixture: true, approval_required: false, legacy_version_http: legacyStatus,
+    api_before_totp: 403, agentcore_before_totp: runtimeBefore.status(),
+    legacy_version_served_investigation: false, invalid_code: 403, reused_code: 403,
+    recovered_only_after_new_totp: true, recovery_reuse: 403, logout_revoked: true,
+    stable_avatar: true, admin_operations: 404, uploads: 404,
+    streaming_events: frames.length, terminal: frames.at(-1)?.payload.status,
+  }))
+})
+
 test('CloudFront serves HTTPS and excludes unapproved users from analytics and administration', async ({ page, request, browser }) => {
   test.skip(!target?.startsWith('https://'), 'The hosted acceptance requires the actual CloudFront URL.')
   const home = await page.goto('/')
@@ -57,6 +254,11 @@ test('CloudFront serves HTTPS and excludes unapproved users from analytics and a
   await expect(page.getByRole('heading', { name: 'Administrator access required' })).toBeVisible()
   expect((await request.get('/api/aegis/v1/coverage')).status()).toBe(401)
   expect((await request.get('/api/aegis/v1/admin/users')).status()).toBe(401)
+  if (v2) {
+    for (const path of ['analytics/epss', 'catalog', 'network', 'cves/CVE-2024-3400']) {
+      expect((await request.get('/api/aegis/v2/' + path)).status()).toBe(401)
+    }
+  }
   if (!fixture && !publicOnly) throw new Error('The hosted acceptance requires scoped identities.')
   if (fixture) {
     const scoped = JSON.parse(await readFile(fixture, 'utf8')) as HostedFixture
@@ -120,13 +322,64 @@ test('approved browser reads one snapshot and streams live evidence-backed mitig
     }, png.toString('base64'))
   }, { message: 'Wait for visible globe rendering' }).toBeGreaterThan(8)
   await country.selectOption('PE')
-  await expect(world.getByText('Network context unavailable')).toBeVisible()
+  if (v2) {
+    await expect(world.getByLabel('Annual WDI network context')).toContainText('Peru')
+    await expect(world.getByText('LTE population coverage unavailable')).toBeVisible()
+  } else {
+    await expect(world.getByText('Network context unavailable')).toBeVisible()
+  }
   await expect(world.getByText('Exposure coverage unavailable')).toBeVisible()
   await country.selectOption('CA')
   await expect(world.getByText('Canadian Radio-television and Telecommunications Commission')).toBeVisible()
   await expect(world.getByText('Exposure coverage unavailable')).toBeVisible()
   await country.selectOption('')
-  await expect(page.locator('tbody tr').first()).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Ranked vulnerabilities' }).locator('tbody tr').first()).toBeVisible()
+  if (v2) {
+    const history = page.getByRole('region', { name: 'EPSS history' })
+    await expect(history.locator('canvas')).toBeVisible({ timeout: 40000 })
+    await history.getByRole('button', { name: 'Full history' }).click()
+    await expect(history).toContainText('2,042 observed days · 9 dates absent from the source')
+    await history.getByLabel('Inspect EPSS date').fill('2021-04-22')
+    await expect(history).toContainText('2021-04-22 · No source observation')
+    await history.getByLabel('EPSS start date').fill('2021-04-20')
+    await history.getByLabel('EPSS end date').fill('2021-04-23')
+    await history.getByRole('button', { name: 'Apply date range' }).click()
+    await expect(history).toContainText('2 observed days · 2 dates absent from the source')
+    await history.screenshot({ path: join(evidence, 'hosted-epss-history.png') })
+    if (historicalAgent) {
+      const historicalStream = page.waitForResponse(r =>
+        r.request().method() === 'POST' && r.url().endsWith('/api/aegis/v1/investigations'))
+      await history.getByRole('button', { name: 'Analyze selected EPSS dates' }).click()
+      const streamed = await historicalStream
+      expect(streamed.status()).toBe(200)
+      expect(streamed.headers()['content-type']).toContain('text/event-stream')
+      expect(streamed.request().postDataJSON().history).toMatchObject({
+        date_from: '2021-04-20', date_to: '2021-04-23',
+      })
+      const historyReport = page.getByRole('article', { name: 'Investigation report' })
+      await expect(historyReport).toContainText('Bedrock analysis', { timeout: 68000 })
+      await expect(historyReport).toContainText('Country exposure is unavailable')
+      const historyFrames = decode(await streamed.text())
+      expect(historyFrames.map(frame => frame.seq)).toEqual(historyFrames.map((_, index) => index + 1))
+      expect(historyFrames.filter(frame => frame.type === 'done')).toHaveLength(1)
+      expect(historyFrames.at(-1)?.payload.status).toBe('completed')
+      await writeFile(join(evidence, 'hosted-history-agent.json'), JSON.stringify(historyFrames))
+      await historyReport.screenshot({ path: join(evidence, 'hosted-epss-analysis.png') })
+    }
+    const catalog = page.getByRole('region', { name: 'Vulnerability catalog' })
+    await expect(catalog).toContainText('431,133 distinct CVEs')
+    await catalog.getByLabel('CVE identifier').fill('CVE-2024-3400')
+    await catalog.getByRole('button', { name: 'Search catalog' }).click()
+    await catalog.getByRole('button', { name: 'CVE-2024-3400' }).click()
+    await catalog.getByRole('button', { name: 'Open source profile' }).click()
+    const profile = page.getByLabel('Official source profile')
+    await expect(profile).toContainText('CVE exposure geography unavailable')
+    const nvdCapture = profile.getByText('NIST NVD · 2024', { exact: true })
+    await nvdCapture.click()
+    await expect(nvdCapture.locator('..').getByText('Capture SHA-256')).toBeVisible()
+    await page.screenshot({ path: join(evidence, 'hosted-cve-profile.png') })
+    await page.getByRole('dialog', { name: 'CVE detail' }).getByRole('button', { name: 'Close', exact: true }).click()
+  }
   const context = await request.get('/api/aegis/v1/map?country_iso2=CA', { headers })
   expect(context.status()).toBe(200)
   const map = await context.json()

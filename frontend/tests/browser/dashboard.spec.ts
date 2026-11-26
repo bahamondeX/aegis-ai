@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -43,6 +43,46 @@ test('desktop command center streams an investigation and applies evidence-backe
   await expect(page.locator('.map-observations')).toHaveCount(0)
   await page.screenshot({ path: join(evidence, 'desktop.png') })
 
+  const globe = page.getByLabel('Interactive globe with Natural Earth boundaries')
+  const camera = page.getByRole('group', { name: 'Globe camera' })
+  const altitude = Number(await globe.getAttribute('data-altitude'))
+  expect(altitude).toBeGreaterThan(0)
+  await camera.getByRole('button', { name: 'Zoom in' }).click()
+  await expect.poll(async () => Number(await globe.getAttribute('data-altitude'))).toBeLessThan(altitude)
+  const initialLongitude = await globe.getAttribute('data-longitude')
+  await globe.focus()
+  await globe.press('ArrowRight')
+  await expect.poll(() => globe.getAttribute('data-longitude')).not.toBe(initialLongitude)
+  await camera.getByRole('button', { name: 'Reset globe camera' }).click()
+  await expect.poll(async () => Number(await globe.getAttribute('data-altitude'))).toBeCloseTo(altitude)
+
+  const resize = page.getByRole('button', { name: 'Resize map height. Drag or use Up and Down arrows.' })
+  await resize.scrollIntoViewIfNeeded()
+  const height = (await globe.boundingBox())!.height
+  const handle = (await resize.boundingBox())!
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + 70, { steps: 5 })
+  await page.mouse.up()
+  await expect.poll(async () => (await globe.boundingBox())!.height).toBeGreaterThan(height + 45)
+  await page.getByRole('button', { name: 'Fullscreen map' }).click()
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains('geo-stage'))).toBe(true)
+  await page.screenshot({ path: join(evidence, 'globe-fullscreen.png') })
+  const frames = await page.evaluate(() => new Promise<{ frames: number; ms: number }>(resolve => {
+    let start: number | undefined
+    let count = 0
+    function tick(now: number) {
+      start ??= now
+      if (now - start >= 750) resolve({ frames: count, ms: now - start })
+      else { count++; requestAnimationFrame(tick) }
+    }
+    requestAnimationFrame(tick)
+  }))
+  await writeFile(join(evidence, 'globe-frame-sample.json'), JSON.stringify(frames))
+  await page.getByRole('button', { name: 'Exit fullscreen map' }).click()
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBe(null)
+
+
   await page.getByRole('button', { name: 'Tactical', exact: true }).click()
   await expect(page.locator('.maplibregl-canvas').first()).toBeVisible()
   const map = page.getByLabel('Tactical map with Natural Earth boundaries')
@@ -60,7 +100,7 @@ test('desktop command center streams an investigation and applies evidence-backe
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
 
-  const baseline = await page.locator('tbody tr').count()
+  const baseline = await page.getByRole('region', { name: 'Ranked vulnerabilities' }).locator('tbody tr').count()
   expect(baseline).toBeGreaterThan(3)
   const sent = page.waitForResponse(response =>
     response.url().endsWith('/api/aegis/v1/investigations') && response.request().method() === 'POST',
@@ -71,7 +111,7 @@ test('desktop command center streams an investigation and applies evidence-backe
   await expect(page.getByLabel('Investigation progress').locator('li')).toHaveCount(4)
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.getByText('Filters applied to the workspace')).toBeVisible()
-  await expect(page.locator('tbody tr')).toHaveCount(3)
+  await expect(page.getByRole('region', { name: 'Ranked vulnerabilities' }).locator('tbody tr')).toHaveCount(3)
   await page.locator('#investigations').scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(evidence, 'investigation.png') })
 
@@ -123,7 +163,12 @@ test('world and country context stay independent as a CVE moves from graph to an
 
   await country.selectOption('PE')
   await expect(country).toHaveValue('PE')
-  await expect(map.getByText('Network context unavailable')).toBeVisible()
+  if (process.env.NUXT_PUBLIC_NETWORK_CONTEXT_V2 === 'true') {
+    await expect(map.getByLabel('Annual WDI network context')).toContainText('Peru')
+    await expect(map.getByText('LTE population coverage unavailable')).toBeVisible()
+  } else {
+    await expect(map.getByText('Network context unavailable')).toBeVisible()
+  }
   await expect(map.getByText('Exposure coverage unavailable')).toBeVisible()
   await expect(page.getByText('No ranked vulnerabilities match the active scope.')).toBeVisible()
 
@@ -141,7 +186,7 @@ test('world and country context stay independent as a CVE moves from graph to an
   await expect(map.getByText('Canadian Radio-television and Telecommunications Commission')).toBeVisible()
   await map.getByLabel('CVE geographic evidence').check()
   await country.selectOption('')
-  await expect(page.locator('tbody tr').first()).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Ranked vulnerabilities' }).locator('tbody tr').first()).toBeVisible()
 
   const relation = page.getByLabel('Inspect a relationship')
   await relation.selectOption({ index: 1 })

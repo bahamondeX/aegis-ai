@@ -1,7 +1,7 @@
 import type {
   Edge, Evidence, Exposure, Filters, InvestigationEvent, Report, RiskSummary,
 } from '../../investigations/events'
-import { readInvestigation } from '../../investigations/stream'
+import { readInvestigation, type HistorySelection } from '../../investigations/stream'
 import {
   acceptProposal, begin, editFilters, receive, type InvestigationView,
 } from '../../investigations/view'
@@ -48,6 +48,7 @@ export function useDashboard() {
   const evidenceIndex = shallowRef<Record<string, Evidence>>({})
   const selectedEvidence = shallowRef<Evidence>()
   const detail = shallowRef<CveDetail>()
+  const detailCveId = ref<string>()
   const detailLoading = ref(false)
   const detailError = ref('')
   const mitigationCve = ref('')
@@ -70,7 +71,7 @@ export function useDashboard() {
 
   async function request<T>(path: string, signal?: AbortSignal, query = ''): Promise<T> {
     const response = await fetch('/api/aegis/' + path + query, {
-      headers: { Authorization: 'Bearer ' + auth.token.value },
+      headers: auth.requestHeaders(),
       signal, cache: 'no-store',
     })
     if (!response.ok) {
@@ -84,7 +85,7 @@ export function useDashboard() {
   }
 
   async function load() {
-    const token = auth.token.value
+    const token = auth.sessionIdentity.value
     dataRequest?.abort()
     if (!token || !auth.authenticated.value) {
       data.value = undefined
@@ -114,7 +115,7 @@ export function useDashboard() {
       }
       const graph = await request<Envelope<Edge[]>>('v1/graph', signal, '?' + graphFilters)
       const geo = verifiedMap(await request<Envelope<Exposure[]>>('v1/map', signal, suffix))
-      if (signal.aborted || token !== auth.token.value) return
+      if (signal.aborted || token !== auth.sessionIdentity.value) return
       if ([kpis, cves, graph, geo].some(item =>
         item.snapshot_id !== coverage.snapshot_id || item.score_date !== coverage.score_date,
       )) throw new Error('Data services disagree on the active snapshot.')
@@ -149,6 +150,7 @@ export function useDashboard() {
   function closeDetail() {
     detailRequest?.abort()
     detail.value = undefined
+    detailCveId.value = undefined
     detailError.value = ''
     detailLoading.value = false
   }
@@ -157,16 +159,17 @@ export function useDashboard() {
     closeDetail()
     const snapshot = view.value.snapshot
     const country = filters.value.country_iso2
-    const token = auth.token.value
+    const token = auth.sessionIdentity.value
     if (!snapshot || !token) return
     const controller = new AbortController()
     detailRequest = controller
+    detailCveId.value = cve
     detailLoading.value = true
     const query = new URLSearchParams({ snapshot_id: snapshot })
     if (country) query.set('country_iso2', country)
     try {
       const current = verifiedDetail(await request<unknown>('v1/cves/' + cve, controller.signal, '?' + query))
-      if (controller.signal.aborted || snapshot !== view.value.snapshot || token !== auth.token.value) return
+      if (controller.signal.aborted || snapshot !== view.value.snapshot || token !== auth.sessionIdentity.value) return
       if (current.snapshot_id !== snapshot || current.vulnerability.cve_id !== cve ||
         current.geography.country_iso2 !== (country ?? null)) throw new Error()
       detail.value = current
@@ -175,13 +178,13 @@ export function useDashboard() {
         ...Object.fromEntries(current.evidence.map(item => [item.evidence_id, item])),
       }
     } catch {
-      if (!controller.signal.aborted) detailError.value = 'The CVE could not be verified against this snapshot.'
+      if (!controller.signal.aborted) detailError.value = 'Workspace detail is unavailable for this CVE and snapshot.'
     } finally {
       if (detailRequest === controller) detailLoading.value = false
     }
   }
 
-  async function start(question: string, scope?: 'global' | 'regional', context?: CveDetail) {
+  async function start(question: string, scope?: 'global' | 'regional', context?: CveDetail, history?: HistorySelection) {
     if (!question.trim() || running.value || !view.value.snapshot) return
     if (context && (context.snapshot_id !== view.value.snapshot ||
       context.geography.country_iso2 !== (filters.value.country_iso2 ?? null))) return
@@ -199,18 +202,19 @@ export function useDashboard() {
     try {
       const source = readInvestigation({
         endpoint: new URL('/api/aegis/v1/investigations', window.location.origin),
-        token: auth.token.value,
+        token: auth.localToken.value,
         key: requestKey,
         signal: controller.signal,
         request: {
           question,
           snapshot_id: view.value.snapshot,
-          filters: context ? { ...filters.value, cve_ids: [context.vulnerability.cve_id] } : filters.value,
+          history,
+          filters: history ? undefined : context ? { ...filters.value, cve_ids: [context.vulnerability.cve_id] } : filters.value,
           mitigation: context ? {
             cve_id: context.vulnerability.cve_id,
             evidence_ids: context.evidence.map(item => item.evidence_id),
           } : undefined,
-          scope: filters.value.country_iso2 ? 'regional' : scope,
+          scope: history ? 'global' : filters.value.country_iso2 ? 'regional' : scope,
         },
       })
       for await (const event of source) {
@@ -246,7 +250,7 @@ export function useDashboard() {
     try {
       const response = await fetch(`/api/aegis/v1/investigations/${id}/cancel`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + auth.token.value, 'Idempotency-Key': requestKey },
+        headers: { ...auth.requestHeaders(), 'Idempotency-Key': requestKey },
       })
       if (!response.ok) throw new Error()
     } catch {
@@ -271,20 +275,20 @@ export function useDashboard() {
       selectedEvidence.value = evidenceIndex.value[id]
       return
     }
-    const token = auth.token.value
+    const token = auth.sessionIdentity.value
     if (!token) return
     try {
       const evidence = await request<Envelope<Evidence>>('v1/evidence/' + id)
-      if (token !== auth.token.value) return
+      if (token !== auth.sessionIdentity.value) return
       if (evidence.snapshot_id !== view.value.snapshot) throw new Error('Evidence snapshot changed.')
       evidenceIndex.value = { ...evidenceIndex.value, [id]: evidence.data }
       selectedEvidence.value = evidence.data
     } catch {
-      if (token === auth.token.value) error.value = 'Evidence could not be read from the active snapshot.'
+      if (token === auth.sessionIdentity.value) error.value = 'Evidence could not be read from the active snapshot.'
     }
   }
 
-  watch([auth.token, auth.authenticated], () => {
+  watch([auth.sessionIdentity, auth.authenticated], () => {
     investigation?.abort()
     closeDetail()
     mitigationCve.value = ''
@@ -304,7 +308,7 @@ export function useDashboard() {
   return {
     status, error, data, scoreDate, view, filters, events, report, running, steps,
     investigationError, evidenceIndex, selectedEvidence, proposalHistory,
-    detail, detailLoading, detailError, mitigationCve, mitigationCountry,
+    detail, detailCveId, detailLoading, detailError, mitigationCve, mitigationCountry,
     load, changeFilters, start, cancel, applyProposal, inspect, openDetail, closeDetail,
   }
 }
