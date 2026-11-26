@@ -8,7 +8,7 @@ const authorizedOrigins = new Set(['https://aegis-candidate.vercel.app', 'https:
 const enabled = process.env.AEGIS_BROWSER_RELEASE_AUTH === '1' && authorizedOrigins.has(base)
 const readPath = '/api/aegis/v1/cves?limit=1'
 
-if (enabled) test.use({ channel: 'chrome', headless: false })
+if (enabled) test.use({ headless: false })
 
 test('registered origin keeps the OB Auth callback, CVE access, demo navigation and logout', async ({ page }) => {
   test.skip(!enabled, 'Requires a human sign-in at the registered release origin.')
@@ -25,11 +25,7 @@ test('registered origin keeps the OB Auth callback, CVE access, demo navigation 
   const callback = page.waitForResponse(response => {
     const url = new URL(response.url())
     return url.origin === base && url.pathname === '/auth/callback'
-  }, { timeout: 450_000 })
-  const account = page.waitForResponse(response => {
-    const url = new URL(response.url())
-    return url.origin === base && url.pathname === '/api/aegis/v1/account' && response.status() === 200
-  }, { timeout: 455_000 })
+  }, { timeout: 450_000 }).catch(() => undefined)
   await page.getByRole('link', { name: 'Continue to OB Auth' }).click()
   const start = await loginResponse
   expect(start.status()).toBe(303)
@@ -43,11 +39,18 @@ test('registered origin keeps the OB Auth callback, CVE access, demo navigation 
   }) + '\n', { mode: 0o600 })
 
   const returned = await callback
-  expect(returned.status()).toBe(303)
+  if (!returned) throw new Error('The browser closed or the wait expired before an OB Auth callback arrived.')
   const destination = new URL(returned.headers().location ?? '', base)
+  await writeFile(join(evidence, 'auth-callback.json'), JSON.stringify({
+    origin: base, status: returned.status(),
+    workspaceRedirect: destination.origin === base && destination.pathname === '/',
+  }) + '\n', { mode: 0o600 })
+  expect(returned.status()).toBe(303)
   expect(destination.origin).toBe(base)
   expect(destination.pathname).toBe('/')
-  expect((await account).status()).toBe(200)
+  await page.waitForURL(base + '/')
+  const account = await page.request.get('/api/aegis/v1/account', options)
+  expect(account.status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Threat command center.' })).toBeVisible()
   const authorized = await page.request.get(readPath, options)
   expect(authorized.status()).toBe(200)
@@ -73,7 +76,7 @@ test('registered origin keeps the OB Auth callback, CVE access, demo navigation 
   await writeFile(join(evidence, 'auth-verified.json'), JSON.stringify({
     origin: base, checkedAt: new Date().toISOString(),
     loginStatus: start.status(), callbackStatus: returned.status(), callbackDestination: destination.pathname,
-    accountStatus: 200, catalogStatus: catalog.status(),
+    accountStatus: account.status(), catalogStatus: catalog.status(),
     cveBefore: unauthenticated.status(), cveDuring: authorized.status(), logoutStatus: loggedOut.status(),
     cveAfter: denied.status(), demoNavigation: true,
   }, null, 2) + '\n', { mode: 0o600 })
